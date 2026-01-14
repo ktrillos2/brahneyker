@@ -333,10 +333,15 @@ function FacturasContent() {
             }
             .footer {
               text-align: center;
+              width: 100%;
               margin-top: 15px;
               padding-top: 10px;
               border-top: 1px dashed #000;
               font-size: 12px;
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
             }
           </style>
         </head>
@@ -388,8 +393,8 @@ function FacturasContent() {
           </div>
           
           <div class="footer">
-            <p>¡Gracias por su preferencia!</p>
-            <p>Síguenos en @brahneyker</p>
+            <p style="margin: 2px 0;">¡Gracias por su preferencia!</p>
+            <p style="margin: 2px 0;">Síguenos en @stella_useche</p>
           </div>
         </body>
       </html>
