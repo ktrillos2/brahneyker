@@ -200,10 +200,10 @@ export default function CitasPage() {
     try {
       if (editingAppointment) {
         await updateAppointment(editingAppointment.id, formData)
-        showNotification("Cita actualizada correctamente", "success")
+        showNotification("Cita actualizada", "success")
       } else {
         await createAppointment(formData)
-        showNotification("Cita agendada correctamente", "success")
+        showNotification("Cita agendada", "success")
       }
       setShowModal(false)
       fetchAppointments()
@@ -290,7 +290,7 @@ export default function CitasPage() {
                   {timeSlots.map((time) => (
                     <div key={time} className="grid grid-cols-[80px_repeat(7,1fr)] hover:bg-muted/10 transition-colors">
                       {/* Time Label */}
-                      <div className="p-2 text-xs text-muted-foreground font-medium border-r border-border flex items-center justify-center bg-muted/10">
+                      <div className="p-2 text-xs text-foreground font-bold border-r border-border flex items-center justify-center bg-muted/10">
                         {formatTime(time)}
                       </div>
                       {/* Days Cells */}
@@ -480,24 +480,7 @@ export default function CitasPage() {
 
 
               {/* Service Type */}
-              <div>
-                <label className="text-sm font-medium text-foreground mb-2 block uppercase">Tipo de Servicio</label>
-                <Select
-                  value={formData.serviceType}
-                  onValueChange={(value) => setFormData({ ...formData, serviceType: value })}
-                >
-                  <SelectTrigger className="w-full bg-transparent border-primary/50 text-foreground focus:ring-primary h-11">
-                    <SelectValue placeholder="Selecciona un servicio" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {services.map((service) => (
-                      <SelectItem key={service} value={service}>
-                        {service}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+
 
               {/* Details */}
               <div>

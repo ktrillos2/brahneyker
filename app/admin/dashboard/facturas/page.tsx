@@ -3,7 +3,7 @@
 import type React from "react"
 import { Suspense } from "react"
 import { useState, useEffect, useRef, useMemo } from "react"
-import { getProducts } from "@/app/actions/inventory"
+import { getProducts, updateProduct } from "@/app/actions/inventory"
 import {
   Search,
   Plus,
@@ -229,13 +229,38 @@ function FacturasContent() {
     setCurrentItems(currentItems.filter((item) => item.productId !== productId))
   }
 
-  const deleteInvoice = (id: string) => {
+  const deleteInvoice = async (id: string) => {
     if (!confirm("¿Está seguro de eliminar esta factura?")) return
+
+    const invoiceToDelete = invoices.find(inv => inv.id === id)
+    if (invoiceToDelete) {
+      // Restore stock for each item
+      for (const item of invoiceToDelete.items) {
+        const product = products.find(p => p.id === item.productId)
+        if (product) {
+          const newQuantity = product.quantity + item.quantity
+          // Update in DB
+          try {
+            await updateProduct(product.id, { ...product, quantity: newQuantity.toString() })
+          } catch (e) {
+            console.error("Error restoring stock for product", product.name, e)
+          }
+        }
+      }
+
+      // Refresh products from DB to ensure local state is synced
+      try {
+        const { products: dbProducts } = await getProducts(1, 1000)
+        setProducts(dbProducts)
+      } catch (error) {
+        console.error("Error refreshing products", error)
+      }
+    }
 
     const updated = invoices.filter(inv => inv.id !== id)
     setInvoices(updated)
     localStorage.setItem("invoices", JSON.stringify(updated))
-    showNotification("Factura eliminada", "success")
+    showNotification("Factura eliminada y productos devueltos al inventario", "success")
   }
 
 
