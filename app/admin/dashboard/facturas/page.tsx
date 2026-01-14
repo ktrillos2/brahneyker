@@ -70,19 +70,71 @@ function FacturasContent() {
       })
     })
 
-    // 2. Sort products by frequency (descending)
+    // 2. Sort products by frequency (descending) or Search Relevance
     // 3. Filter out products that are already in currentItems
     // 4. Filter out out-of-stock products
-    return [...products]
-      .filter(p => p.quantity > 0) // Must have stock
-      .filter(p => !currentItems.some(item => item.productId === p.id)) // Must not be in current invoice
+
+    let candidates = [...products]
+      .filter(p => p.quantity > 0)
+      .filter(p => !currentItems.some(item => item.productId === p.id))
+
+    // If search term exists, rank by relevance
+    if (barcodeInput.trim()) {
+      const searchTerms = barcodeInput.toLowerCase().split(/\s+/).filter(t => t.length > 0)
+
+      // Filter first to reduce set
+      candidates = candidates.filter(p => {
+        const nameLower = p.name.toLowerCase()
+        const barcode = p.barcode
+        // Keep if matches barcode perfectly OR contains at least one search term
+        if (barcode.includes(barcodeInput)) return true
+        return searchTerms.some(term => nameLower.includes(term))
+      })
+
+      // Sort by score
+      return candidates.sort((a, b) => {
+        let scoreA = 0
+        let scoreB = 0
+        const nameA = a.name.toLowerCase()
+        const nameB = b.name.toLowerCase()
+
+        // Barcode exact match is highest priority
+        if (a.barcode === barcodeInput) scoreA += 1000
+        if (b.barcode === barcodeInput) scoreB += 1000
+
+        // Exact name match
+        if (nameA === barcodeInput.toLowerCase()) scoreA += 500
+        if (nameB === barcodeInput.toLowerCase()) scoreB += 500
+
+        // Word overlap count
+        searchTerms.forEach(term => {
+          if (nameA.includes(term)) scoreA += 10
+          if (nameB.includes(term)) scoreB += 10
+
+          // Bonus for starting with term
+          if (nameA.startsWith(term)) scoreA += 5
+          if (nameB.startsWith(term)) scoreB += 5
+        })
+
+        // Secondary sort: Popularity
+        const countA = productCounts[a.id] || 0
+        const countB = productCounts[b.id] || 0
+
+        // If scores differ, use score. Else use popularity.
+        if (scoreA !== scoreB) return scoreB - scoreA
+        return countB - countA
+      }).slice(0, 20)
+    }
+
+    // Default: Popularity Sort
+    return candidates
       .sort((a, b) => {
         const countA = productCounts[a.id] || 0
         const countB = productCounts[b.id] || 0
         return countB - countA // Higher count first
       })
       .slice(0, 20) // Limit to top 20 to ensure it always looks full
-  }, [products, invoices, currentItems])
+  }, [products, invoices, currentItems, barcodeInput])
   useEffect(() => {
     // Fetch products from DB
     const fetchProducts = async () => {

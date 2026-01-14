@@ -275,7 +275,7 @@ function InventarioContent() {
                 <th className="p-4">Producto</th>
                 <th className="p-4">Categoría</th>
                 <th className="p-4 text-center">Precio / Costo</th>
-                <th className="p-4 text-center">Stock</th>
+                <th className="p-4 text-center">Contenido</th>
                 <th className="p-4 text-right">Acciones</th>
               </tr>
             </thead>
@@ -319,9 +319,32 @@ function InventarioContent() {
                       </div>
                     </td>
                     <td className="p-4 text-center">
-                      <div className={`inline-flex items-center gap-1 font-medium ${product.quantity <= product.minStock ? 'text-red-500' : 'text-green-600'}`}>
-                        {product.quantity <= product.minStock && <AlertCircle className="w-4 h-4" />}
-                        {product.quantity}
+                      <div className="flex items-center justify-center gap-2" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          onClick={async () => {
+                            const newQuantity = Math.max(0, product.quantity - 1)
+                            await updateProduct(product.id, { ...product, quantity: newQuantity.toString() })
+                            fetchProducts()
+                          }}
+                          className="w-6 h-6 flex items-center justify-center rounded bg-muted hover:bg-muted/80 text-foreground"
+                          title="Disminuir"
+                        >
+                          <Minus className="w-3 h-3" />
+                        </button>
+                        <div className={`inline-flex items-center gap-1 font-medium ${product.quantity <= product.minStock ? 'text-yellow-600' : 'text-foreground'}`}>
+                          {product.quantity <= product.minStock && <AlertCircle className="w-3 h-3" />}
+                          {product.quantity}
+                        </div>
+                        <button
+                          onClick={async () => {
+                            await updateProduct(product.id, { ...product, quantity: (product.quantity + 1).toString() })
+                            fetchProducts()
+                          }}
+                          className="w-6 h-6 flex items-center justify-center rounded bg-primary/10 hover:bg-primary/20 text-primary"
+                          title="Aumentar"
+                        >
+                          <Plus className="w-3 h-3" />
+                        </button>
                       </div>
                     </td>
                     <td className="p-4 text-right">
