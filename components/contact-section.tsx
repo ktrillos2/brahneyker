@@ -2,7 +2,15 @@
 
 import type React from "react"
 import { useState } from "react"
+
 import { Send, Phone } from "lucide-react"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 export function ContactSection() {
   const [formData, setFormData] = useState({
@@ -88,18 +96,22 @@ export function ContactSection() {
               >
                 Tipo de Servicio
               </label>
-              <select
-                id="servicio"
-                name="servicio"
-                required
+              <Select
                 value={formData.servicio}
-                onChange={handleChange}
-                className="w-full px-4 py-3 bg-muted border border-border text-foreground focus:outline-none focus:border-primary transition-colors"
+                onValueChange={(value) => setFormData({ ...formData, servicio: value })}
               >
-                <option value="">Selecciona un servicio</option>
-                <option value="Cabello">Cabello</option>
-                <option value="Uñas">Uñas</option>
-              </select>
+                <SelectTrigger className="w-full px-4 py-3 h-auto bg-muted border border-border text-foreground focus:ring-1 focus:ring-primary focus:border-primary transition-colors">
+                  <SelectValue placeholder="Selecciona un servicio" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Cabello">Cabello</SelectItem>
+                  <SelectItem value="Uñas">Uñas</SelectItem>
+                  <SelectItem value="Maquillaje">Maquillaje</SelectItem>
+                  <SelectItem value="Depilación">Depilación</SelectItem>
+                  <SelectItem value="Tratamientos">Tratamientos</SelectItem>
+                  <SelectItem value="Otros">Otros</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div>

@@ -31,6 +31,7 @@ export const appointments = sqliteTable("appointments", {
     duration: integer("duration").default(60), // in minutes
     details: text("details").notNull(),
     stylist: text("stylist").notNull(), // "Damaris" | "Fabiola"
+    serviceType: text("service_type").default("Otro"),
     status: text("status").notNull().default("pendiente"), // "pendiente" | "confirmada" | "completada" | "cancelada"
     createdAt: text("created_at").default(sql`(CURRENT_TIMESTAMP)`),
 })

@@ -10,6 +10,13 @@ import {
   Clock,
   Trash2,
 } from "lucide-react"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { getAppointments, createAppointment, updateAppointment, deleteAppointment } from "../../../actions/appointments"
 
 interface Appointment {
@@ -19,6 +26,7 @@ interface Appointment {
   duration: number
   details: string
   stylist: "Damaris" | "Fabiola"
+  serviceType: string
   status: "pendiente" | "confirmada" | "completada" | "cancelada"
 }
 
@@ -29,6 +37,20 @@ const timeSlots = [
 ]
 
 const stylists = ["Damaris", "Fabiola"] as const
+
+const services = [
+  "Corte de Cabello",
+  "Cepillado",
+  "Keratina",
+  "Color / Tinte",
+  "Mechas / Balayage",
+  "Manicure",
+  "Pedicure",
+  "Maquillaje",
+  "Depilación",
+  "Tratamiento Capilar",
+  "Otro"
+]
 
 const statusColors = {
   pendiente: "bg-yellow-500/10 text-yellow-500 border-l-2 border-yellow-500",
@@ -69,6 +91,7 @@ export default function CitasPage() {
     time: "",
     duration: 60,
     details: "",
+    serviceType: "",
     stylist: "Damaris" as "Damaris" | "Fabiola",
   })
 
@@ -119,6 +142,38 @@ export default function CitasPage() {
 
   const weekDays = getWeekDays()
   const weekDayNames = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
+
+
+  const handleOpenModal = (
+    date?: Date,
+    time?: string,
+    stylist?: "Damaris" | "Fabiola",
+    appointment?: Appointment
+  ) => {
+    if (appointment) {
+      setEditingAppointment(appointment)
+      setFormData({
+        date: appointment.date,
+        time: appointment.time,
+        duration: appointment.duration || 60,
+        details: appointment.details,
+        serviceType: appointment.serviceType || "Otro",
+        stylist: appointment.stylist as "Damaris" | "Fabiola",
+      })
+    } else {
+      setEditingAppointment(null)
+      const defaultDate = date ? date.toISOString().split("T")[0] : new Date().toISOString().split("T")[0]
+      setFormData({
+        date: defaultDate,
+        time: time || "",
+        duration: 60,
+        details: "",
+        serviceType: "",
+        stylist: stylist || "Damaris",
+      })
+    }
+    setShowModal(true)
+  }
 
   const handleCloseModal = () => {
     setShowModal(false)
@@ -422,16 +477,38 @@ export default function CitasPage() {
                 </div>
               </div>
 
+
+
+              {/* Service Type */}
+              <div>
+                <label className="text-sm font-medium text-foreground mb-2 block uppercase">Tipo de Servicio</label>
+                <Select
+                  value={formData.serviceType}
+                  onValueChange={(value) => setFormData({ ...formData, serviceType: value })}
+                >
+                  <SelectTrigger className="w-full bg-transparent border-primary/50 text-foreground focus:ring-primary h-11">
+                    <SelectValue placeholder="Selecciona un servicio" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {services.map((service) => (
+                      <SelectItem key={service} value={service}>
+                        {service}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
               {/* Details */}
               <div>
-                <label className="text-sm font-medium text-foreground mb-2 block">Detalles de la Cita *</label>
+                <label className="text-sm font-medium text-foreground mb-2 block">Detalles Adicionales</label>
                 <textarea
                   value={formData.details}
                   onChange={(e) => setFormData({ ...formData, details: e.target.value })}
-                  rows={4}
+                  rows={3}
                   className="w-full bg-input border border-border rounded-lg py-2.5 px-4 text-foreground focus:outline-none focus:ring-2 focus:ring-primary resize-none"
-                  placeholder="Nombre del cliente, servicio, teléfono, etc..."
-                  required
+                  placeholder="Notas adicionales..."
+                  required={false}
                 />
               </div>
 
@@ -463,9 +540,10 @@ export default function CitasPage() {
               </div>
             </form>
           </div>
-        </div>
-      )}
-    </div>
+        </div >
+      )
+      }
+    </div >
   )
 }
 
