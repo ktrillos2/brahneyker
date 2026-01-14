@@ -269,7 +269,7 @@ function FacturasContent() {
             }
             body {
               font-family: 'Courier New', monospace;
-              font-size: 12px;
+              font-size: 14px;
               padding: 10px;
               width: 80mm;
               margin: 0 auto;
@@ -281,16 +281,16 @@ function FacturasContent() {
               margin-bottom: 10px;
             }
             .header h1 {
-              font-size: 16px;
+              font-size: 20px;
               margin: 0;
             }
             .header p {
               margin: 2px 0;
-              font-size: 10px;
+              font-size: 12px;
             }
             .info {
               margin-bottom: 10px;
-              font-size: 11px;
+              font-size: 13px;
             }
             .items {
               border-top: 1px dashed #000;
@@ -303,8 +303,9 @@ function FacturasContent() {
               margin-bottom: 5px;
             }
             .item-name {
+            .item-name {
               flex: 1;
-              font-size: 11px;
+              font-size: 13px;
             }
             .item-qty {
               width: 30px;
@@ -323,7 +324,7 @@ function FacturasContent() {
               margin-bottom: 5px;
             }
             .total-row.final {
-              font-size: 14px;
+              font-size: 16px;
               font-weight: bold;
               border-top: 1px solid #000;
               padding-top: 5px;
@@ -333,7 +334,7 @@ function FacturasContent() {
               margin-top: 15px;
               padding-top: 10px;
               border-top: 1px dashed #000;
-              font-size: 10px;
+              font-size: 12px;
             }
           </style>
         </head>

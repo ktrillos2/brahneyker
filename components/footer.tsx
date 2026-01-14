@@ -61,6 +61,15 @@ export function Footer() {
         <div className="border-t border-border mt-12 pt-8 text-center">
           <p className="text-foreground/50 text-sm">
             © {new Date().getFullYear()} Salón de Belleza Brahneyker. Todos los derechos reservados.
+            <br />
+            <a
+              href="https://www.kytcode.lat"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 mt-2 hover:text-primary transition-colors cursor-pointer"
+            >
+              Desarrollado por K&T <span className="text-white">🤍</span>
+            </a>
           </p>
         </div>
       </div>
