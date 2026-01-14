@@ -269,7 +269,9 @@ function FacturasContent() {
             }
             body {
               font-family: 'Courier New', monospace;
+              font-family: 'Courier New', monospace;
               font-size: 14px;
+              font-weight: 600;
               padding: 10px;
               width: 80mm;
               margin: 0 auto;
@@ -749,7 +751,20 @@ function FacturasContent() {
               <p className="text-3xl font-bold text-primary mb-4">
                 ${Math.round(selectedInvoice.total).toLocaleString()}
               </p>
-              <p className="text-sm text-muted-foreground mb-6">La factura se ha enviado a imprimir.</p>
+
+              <div className="text-left bg-muted/30 rounded-lg p-4 mb-4 max-h-60 overflow-y-auto">
+                <h5 className="font-semibold text-sm mb-2">Productos:</h5>
+                <div className="space-y-2">
+                  {selectedInvoice.items.map((item, idx) => (
+                    <div key={idx} className="flex justify-between text-sm">
+                      <span>{item.name} <span className="text-muted-foreground">x{item.quantity}</span></span>
+                      <span className="font-medium">${(item.price * item.quantity).toLocaleString()}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <p className="text-sm text-muted-foreground mb-6">La factura se ha guardado correctamente.</p>
               <div className="flex gap-3">
                 <button
                   onClick={() => setSelectedInvoice(null)}
@@ -769,7 +784,6 @@ function FacturasContent() {
           </div>
         </div>
       )}
-
       {/* Hidden Print Reference */}
       <div ref={printRef} className="hidden" />
     </div>
