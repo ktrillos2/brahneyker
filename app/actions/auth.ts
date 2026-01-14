@@ -8,7 +8,7 @@ import { createSession, logout } from "@/lib/auth"
 import { redirect } from "next/navigation"
 
 export async function loginAction(formData: FormData) {
-    const username = formData.get("username") as string
+    const username = (formData.get("username") as string).toLowerCase()
     const password = formData.get("password") as string
 
     if (!username || !password) {
