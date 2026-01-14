@@ -26,7 +26,6 @@ interface Appointment {
   duration: number
   details: string
   stylist: "Damaris" | "Fabiola"
-  serviceType: string
   status: "pendiente" | "confirmada" | "completada" | "cancelada"
 }
 
@@ -37,20 +36,6 @@ const timeSlots = [
 ]
 
 const stylists = ["Damaris", "Fabiola"] as const
-
-const services = [
-  "Corte de Cabello",
-  "Cepillado",
-  "Keratina",
-  "Color / Tinte",
-  "Mechas / Balayage",
-  "Manicure",
-  "Pedicure",
-  "Maquillaje",
-  "Depilación",
-  "Tratamiento Capilar",
-  "Otro"
-]
 
 const statusColors = {
   pendiente: "bg-yellow-500/10 text-yellow-500 border-l-2 border-yellow-500",
@@ -91,7 +76,6 @@ export default function CitasPage() {
     time: "",
     duration: 60,
     details: "",
-    serviceType: "",
     stylist: "Damaris" as "Damaris" | "Fabiola",
   })
 
@@ -157,22 +141,26 @@ export default function CitasPage() {
         time: appointment.time,
         duration: appointment.duration || 60,
         details: appointment.details,
-        serviceType: appointment.serviceType || "Otro",
+        details: appointment.details,
         stylist: appointment.stylist as "Damaris" | "Fabiola",
       })
     } else {
       setEditingAppointment(null)
-      const defaultDate = date ? date.toISOString().split("T")[0] : new Date().toISOString().split("T")[0]
+      // Use local date for both scenarios to avoid UTC shifts
+      const targetDate = date || new Date()
+      const year = targetDate.getFullYear()
+      const month = String(targetDate.getMonth() + 1).padStart(2, '0')
+      const day = String(targetDate.getDate()).padStart(2, '0')
+      const formattedDate = `${year}-${month}-${day}`
+
       setFormData({
-        date: defaultDate,
+        date: formattedDate,
         time: time || "",
         duration: 60,
         details: "",
-        serviceType: "",
         stylist: stylist || "Damaris",
       })
     }
-    setShowModal(true)
   }
 
   const handleCloseModal = () => {
