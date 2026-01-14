@@ -300,21 +300,21 @@ function FacturasContent() {
               padding: 10px 0;
             }
             .item {
-              display: flex;
-              justify-content: space-between;
+              display: grid;
+              grid-template-columns: auto 40px 80px;
+              gap: 5px;
+              align-items: center;
               margin-bottom: 5px;
             }
             .item-name {
-            .item-name {
-              flex: 1;
               font-size: 13px;
+              text-align: left;
             }
             .item-qty {
-              width: 30px;
               text-align: center;
+              font-weight: bold;
             }
             .item-price {
-              width: 70px;
               text-align: right;
             }
             .totals {
