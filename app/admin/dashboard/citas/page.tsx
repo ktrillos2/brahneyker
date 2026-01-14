@@ -206,6 +206,8 @@ export default function CitasPage() {
       await deleteAppointment(id)
       showNotification("Cita eliminada", "success")
       fetchAppointments()
+      setShowModal(false)
+      setEditingAppointment(null)
     }
   }
 
