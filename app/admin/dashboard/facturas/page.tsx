@@ -239,14 +239,14 @@ function FacturasContent() {
     }, 500)
   }
 
-  const handlePrint = () => {
+  const handlePrint = (invoiceOverride?: Invoice) => {
     const printContent = printRef.current
     if (!printContent) return
 
     const printWindow = window.open("", "_blank", "width=400,height=600")
     if (!printWindow) return
 
-    const invoiceToPrint = selectedInvoice || {
+    const invoiceToPrint = invoiceOverride || selectedInvoice || {
       id: `FAC-${Date.now()}`,
       items: currentItems,
       subtotal,
@@ -705,7 +705,7 @@ function FacturasContent() {
                       <button
                         onClick={() => {
                           setSelectedInvoice(invoice)
-                          setTimeout(() => handlePrint(), 100)
+                          handlePrint(invoice)
                         }}
                         className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-medium py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
                       >
@@ -778,7 +778,7 @@ function FacturasContent() {
                   Cerrar
                 </button>
                 <button
-                  onClick={handlePrint}
+                  onClick={() => handlePrint(selectedInvoice!)}
                   className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-medium py-3 rounded-lg flex items-center justify-center gap-2"
                 >
                   <Printer className="w-4 h-4" />
