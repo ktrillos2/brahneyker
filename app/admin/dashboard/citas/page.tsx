@@ -342,9 +342,9 @@ export default function CitasPage() {
                             ) : (
                               <button
                                 onClick={() => handleOpenModal(date, time, stylist)}
-                                className="w-[calc(100%-8px)] h-[calc(100%-8px)] m-1 flex items-center justify-center bg-muted/30 hover:bg-primary/20 rounded transition-all text-primary/50 hover:text-primary"
+                                className="w-[calc(100%-8px)] h-[calc(100%-8px)] m-1 opacity-0 group-hover:opacity-100 flex items-center justify-center hover:bg-primary/10 rounded transition-all"
                               >
-                                <Plus className="w-5 h-5" />
+                                <Plus className="w-4 h-4 text-primary" />
                               </button>
                             )}
                           </div>
