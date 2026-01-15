@@ -280,7 +280,7 @@ export default function CitasPage() {
                   {timeSlots.map((time) => (
                     <div key={time} className="grid grid-cols-[80px_repeat(7,1fr)] hover:bg-muted/10 transition-colors">
                       {/* Time Label */}
-                      <div className="p-2 text-sm text-foreground font-bold border-r border-border flex items-center justify-center bg-muted/10">
+                      <div className="p-1 text-sm text-foreground font-bold border-r border-border flex items-center justify-center bg-muted/10">
                         {formatTime(time)}
                       </div>
                       {/* Days Cells */}
