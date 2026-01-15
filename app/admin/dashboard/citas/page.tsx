@@ -67,6 +67,19 @@ export default function CitasPage() {
     return new Date(d.setDate(diff))
   })
 
+  const [now, setNow] = useState<Date | null>(null)
+
+  useEffect(() => {
+    setNow(new Date())
+
+    // Update weekStart to match client local time
+    const d = new Date()
+    d.setHours(0, 0, 0, 0)
+    const day = d.getDay()
+    const diff = d.getDate() - (day === 0 ? 6 : day - 1)
+    setWeekStart(new Date(d.setDate(diff)))
+  }, [])
+
   const [showModal, setShowModal] = useState(false)
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null)
   const [notification, setNotification] = useState<{ message: string; type: "success" | "error" } | null>(null)
@@ -109,6 +122,7 @@ export default function CitasPage() {
 
   const goToToday = () => {
     const d = new Date()
+    d.setHours(0, 0, 0, 0)
     const day = d.getDay()
     const diff = d.getDate() - (day === 0 ? 6 : day - 1)
     setWeekStart(new Date(d.setDate(diff)))
@@ -265,7 +279,7 @@ export default function CitasPage() {
                 <div className="grid grid-cols-[80px_repeat(7,1fr)] border-b border-border bg-muted/30">
                   <div className="p-3 border-r border-border"></div> {/* Corner */}
                   {weekDays.map((date, i) => {
-                    const isToday = new Date().toDateString() === date.toDateString()
+                    const isToday = now ? now.toDateString() === date.toDateString() : false
                     return (
                       <div key={i} className={`p-3 text-center border-r border-border last:border-r-0 ${isToday ? 'bg-primary/5' : ''}`}>
                         <div className="text-xs text-muted-foreground uppercase font-medium">{weekDayNames[i]}</div>
@@ -285,7 +299,12 @@ export default function CitasPage() {
                       </div>
                       {/* Days Cells */}
                       {weekDays.map((date, i) => {
-                        const dateStr = date.toISOString().split("T")[0]
+                        // FIX: Use local date construction instead of ISO string (which uses UTC)
+                        const year = date.getFullYear()
+                        const month = String(date.getMonth() + 1).padStart(2, '0')
+                        const day = String(date.getDate()).padStart(2, '0')
+                        const dateStr = `${year}-${month}-${day}`
+
                         const currentSlotTime = timeToMinutes(time)
 
                         // Find appointment that covers this slot
@@ -307,7 +326,7 @@ export default function CitasPage() {
                         const isMiddle = apt && !isHead && !isTail
                         const isSingle = isHead && isTail
 
-                        const isToday = new Date().toDateString() === date.toDateString()
+                        const isToday = now ? now.toDateString() === date.toDateString() : false
 
                         return (
                           <div
