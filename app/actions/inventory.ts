@@ -45,6 +45,16 @@ export async function createProduct(data: any) {
     await verifySession()
 
     try {
+        // Check for duplicate barcode
+        const existingProduct = await db.select()
+            .from(products)
+            .where(eq(products.barcode, data.barcode))
+            .get()
+
+        if (existingProduct) {
+            return { error: "El código de barras ya existe" }
+        }
+
         await db.insert(products).values({
             id: crypto.randomUUID(),
             name: data.name,
@@ -68,6 +78,16 @@ export async function updateProduct(id: string, data: any) {
     await verifySession()
 
     try {
+        // Check for duplicate barcode (excluding current product)
+        const existingProduct = await db.select()
+            .from(products)
+            .where(sql`${products.barcode} = ${data.barcode} AND ${products.id} != ${id}`)
+            .get()
+
+        if (existingProduct) {
+            return { error: "El código de barras ya existe" }
+        }
+
         await db.update(products).set({
             name: data.name,
             description: data.description,

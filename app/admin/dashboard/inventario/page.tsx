@@ -174,15 +174,23 @@ function InventarioContent() {
     e.preventDefault()
 
     try {
+      let result
       if (editingProduct) {
-        await updateProduct(editingProduct.id, formData)
+        result = await updateProduct(editingProduct.id, formData)
       } else {
-        await createProduct(formData)
+        result = await createProduct(formData)
       }
+
+      if (result?.error) {
+        alert(result.error)
+        return
+      }
+
       setIsModalOpen(false)
       fetchProducts()
     } catch (error) {
       console.error("Error saving product:", error)
+      alert("Ocurrió un error inesperado al guardar el producto")
     }
   }
 
