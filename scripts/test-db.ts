@@ -1,0 +1,20 @@
+import { createClient } from "@libsql/client"
+
+const url = "libsql://website-rsusuarez.aws-us-east-1.turso.io"
+const authToken = "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJnaWQiOiJkNjJlMWYyNi1mMjFjLTRkNDQtYThhYi1jMzk5ZGQ3YzA3NWQiLCJpYXQiOjE3Njg1OTg1MTcsInJpZCI6IjhlZDMwZTcyLTEwZWMtNDlkYS05ODczLWFiYTFiMzM1NjM3YyJ9.lXGg3fo67mlSKlrcUvo_c1R3rU3XfiFHDv5B_7KhGyIIm7hf7_gBDcAL0ku2bfJ5Dibjr6esuReq91Thp-AHAA"
+
+async function main() {
+    const client = createClient({
+        url,
+        authToken,
+    })
+
+    try {
+        const rs = await client.execute("SELECT 1")
+        console.log("Connection successful!", rs)
+    } catch (e) {
+        console.error("Connection failed:", e)
+    }
+}
+
+main()
