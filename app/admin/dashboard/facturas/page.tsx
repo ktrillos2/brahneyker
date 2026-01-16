@@ -4,6 +4,7 @@ import type React from "react"
 import { Suspense } from "react"
 import { useState, useEffect, useRef, useMemo } from "react"
 import { getProducts, updateProduct } from "@/app/actions/inventory"
+import { createInvoice, getInvoices, deleteInvoice } from "@/app/actions/invoices"
 import {
   Search,
   Plus,
@@ -136,9 +137,19 @@ function FacturasContent() {
 
     fetchProducts()
 
-    // Load invoices from LocalStorage (persisted only locally for now)
-    const storedInvoices = localStorage.getItem("invoices")
-    if (storedInvoices) setInvoices(JSON.parse(storedInvoices))
+    // Load invoices from DB
+    const fetchInvoices = async () => {
+      try {
+        const data = await getInvoices(1, 100)
+        setInvoices(data.invoices as Invoice[])
+      } catch (error) {
+        console.error("Error fetching invoices:", error)
+        showNotification("Error al cargar historial de facturas", "error")
+      }
+    }
+
+    fetchProducts()
+    fetchInvoices()
   }, [])
 
   const showNotification = (message: string, type: "success" | "error") => {
@@ -222,38 +233,30 @@ function FacturasContent() {
     setCurrentItems(currentItems.filter((item) => item.productId !== productId))
   }
 
-  const deleteInvoice = async (id: string) => {
+  const handleDeleteInvoice = async (id: string) => {
     if (!confirm("¿Está seguro de eliminar esta factura?")) return
 
-    const invoiceToDelete = invoices.find(inv => inv.id === id)
-    if (invoiceToDelete) {
-      // Restore stock for each item
-      for (const item of invoiceToDelete.items) {
-        const product = products.find(p => p.id === item.productId)
-        if (product) {
-          const newQuantity = product.quantity + item.quantity
-          // Update in DB
-          try {
-            await updateProduct(product.id, { ...product, quantity: newQuantity.toString() })
-          } catch (e) {
-            console.error("Error restoring stock for product", product.name, e)
-          }
-        }
+    try {
+      const result = await deleteInvoice(id)
+      if (result.error) {
+        showNotification(result.error, "error")
+        return
       }
 
-      // Refresh products from DB to ensure local state is synced
-      try {
-        const { products: dbProducts } = await getProducts(1, 1000)
-        setProducts(dbProducts)
-      } catch (error) {
-        console.error("Error refreshing products", error)
-      }
+      // Refresh invoices and products (stock restored in backend)
+      const [invoicesData, productsData] = await Promise.all([
+        getInvoices(1, 100),
+        getProducts(1, 1000)
+      ])
+
+      setInvoices(invoicesData.invoices as Invoice[])
+      setProducts(productsData.products as Product[])
+      showNotification("Factura eliminada y stock restaurado", "success")
+
+    } catch (error) {
+      console.error("Error deleting invoice", error)
+      showNotification("Error al eliminar factura", "error")
     }
-
-    const updated = invoices.filter(inv => inv.id !== id)
-    setInvoices(updated)
-    localStorage.setItem("invoices", JSON.stringify(updated))
-    showNotification("Factura eliminada y productos devueltos al inventario", "success")
   }
 
 
@@ -261,52 +264,67 @@ function FacturasContent() {
   const tax = 0
   const total = subtotal + tax
 
-  const handleGenerateInvoice = () => {
+  const handleGenerateInvoice = async () => {
     if (currentItems.length === 0) {
       showNotification("Agregue productos a la factura", "error")
       return
     }
 
-    // Update product quantities
-    const updatedProducts = products.map((product) => {
-      const invoiceItem = currentItems.find((item) => item.productId === product.id)
-      if (invoiceItem) {
-        return { ...product, quantity: product.quantity - invoiceItem.quantity }
-      }
-      return product
-    })
-
-    localStorage.setItem("products", JSON.stringify(updatedProducts))
-    setProducts(updatedProducts)
-
-    // Create invoice
-    const newInvoice: Invoice = {
-      id: `FAC-${Date.now()}`,
+    // Create invoice object payload
+    const invoicePayload = {
       items: currentItems,
       subtotal,
-      tax,
       total,
       date: new Date().toISOString(),
       customerName: customerName || "Cliente General",
       customerPhone: customerPhone || "N/A",
     }
 
-    const updatedInvoices = [newInvoice, ...invoices]
-    localStorage.setItem("invoices", JSON.stringify(updatedInvoices))
-    setInvoices(updatedInvoices)
-    setSelectedInvoice(newInvoice)
+    try {
+      const result = await createInvoice(invoicePayload)
 
-    // Clear form
-    setCurrentItems([])
-    setCustomerName("")
-    setCustomerPhone("")
+      if (result.error) {
+        showNotification(result.error, "error")
+        return
+      }
 
-    showNotification("Factura generada exitosamente", "success")
+      const newInvoice: Invoice = {
+        id: result.invoiceId!,
+        items: currentItems,
+        subtotal,
+        tax,
+        total,
+        date: invoicePayload.date,
+        customerName: invoicePayload.customerName,
+        customerPhone: invoicePayload.customerPhone
+      }
 
-    // Auto-print
-    setTimeout(() => {
-      handlePrint()
-    }, 500)
+      // Refresh products to reflect stock changes from backend
+      const { products: dbProducts } = await getProducts(1, 1000)
+      setProducts(dbProducts)
+
+      // Refresh invoices list
+      const invoicesData = await getInvoices(1, 100)
+      setInvoices(invoicesData.invoices as Invoice[])
+
+      setSelectedInvoice(newInvoice)
+
+      // Clear form
+      setCurrentItems([])
+      setCustomerName("")
+      setCustomerPhone("")
+
+      showNotification("Factura generada exitosamente", "success")
+
+      // Auto-print
+      setTimeout(() => {
+        handlePrint(newInvoice)
+      }, 500)
+
+    } catch (error) {
+      console.error("Error generating invoice:", error)
+      showNotification("Error al generar factura", "error")
+    }
   }
 
   const handlePrint = (invoiceOverride?: Invoice) => {
@@ -799,12 +817,12 @@ function FacturasContent() {
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
-                          deleteInvoice(invoice.id)
+                          handleDeleteInvoice(invoice.id)
                         }}
-                        className="p-2 bg-red-100 hover:bg-red-200 text-red-600 rounded-lg transition-colors flex items-center justify-center"
-                        title="Eliminar Factura"
+                        className="flex-1 bg-red-50 hover:bg-red-100 text-red-600 font-medium py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
                       >
                         <Trash2 className="w-4 h-4" />
+                        Eliminar
                       </button>
                     </div>
                   </div>
@@ -855,7 +873,7 @@ function FacturasContent() {
                   Cerrar
                 </button>
                 <button
-                  onClick={() => handlePrint(selectedInvoice!)}
+                  onClick={() => handlePrint(selectedInvoice)}
                   className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-medium py-3 rounded-lg flex items-center justify-center gap-2"
                 >
                   <Printer className="w-4 h-4" />
@@ -866,6 +884,7 @@ function FacturasContent() {
           </div>
         </div>
       )}
+
       {/* Hidden Print Reference */}
       <div ref={printRef} className="hidden" />
     </div>
@@ -874,7 +893,7 @@ function FacturasContent() {
 
 export default function FacturasPage() {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<div className="p-8 text-center">Cargando facturación...</div>}>
       <FacturasContent />
     </Suspense>
   )
