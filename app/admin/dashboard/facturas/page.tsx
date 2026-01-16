@@ -74,59 +74,10 @@ function FacturasContent() {
     // 3. Filter out products that are already in currentItems
     // 4. Filter out out-of-stock products
 
-    let candidates = [...products]
+    const candidates = products
       .filter(p => p.quantity > 0)
       .filter(p => !currentItems.some(item => item.productId === p.id))
 
-    // If search term exists, rank by relevance
-    if (barcodeInput.trim()) {
-      const searchTerms = barcodeInput.toLowerCase().split(/\s+/).filter(t => t.length > 0)
-
-      // Filter first to reduce set
-      candidates = candidates.filter(p => {
-        const nameLower = p.name.toLowerCase()
-        const barcode = p.barcode
-        // Keep if matches barcode perfectly OR contains at least one search term
-        if (barcode.includes(barcodeInput)) return true
-        return searchTerms.some(term => nameLower.includes(term))
-      })
-
-      // Sort by score
-      return candidates.sort((a, b) => {
-        let scoreA = 0
-        let scoreB = 0
-        const nameA = a.name.toLowerCase()
-        const nameB = b.name.toLowerCase()
-
-        // Barcode exact match is highest priority
-        if (a.barcode === barcodeInput) scoreA += 1000
-        if (b.barcode === barcodeInput) scoreB += 1000
-
-        // Exact name match
-        if (nameA === barcodeInput.toLowerCase()) scoreA += 500
-        if (nameB === barcodeInput.toLowerCase()) scoreB += 500
-
-        // Word overlap count
-        searchTerms.forEach(term => {
-          if (nameA.includes(term)) scoreA += 10
-          if (nameB.includes(term)) scoreB += 10
-
-          // Bonus for starting with term
-          if (nameA.startsWith(term)) scoreA += 5
-          if (nameB.startsWith(term)) scoreB += 5
-        })
-
-        // Secondary sort: Popularity
-        const countA = productCounts[a.id] || 0
-        const countB = productCounts[b.id] || 0
-
-        // If scores differ, use score. Else use popularity.
-        if (scoreA !== scoreB) return scoreB - scoreA
-        return countB - countA
-      }).slice(0, 20)
-    }
-
-    // Default: Popularity Sort
     return candidates
       .sort((a, b) => {
         const countA = productCounts[a.id] || 0
@@ -134,7 +85,43 @@ function FacturasContent() {
         return countB - countA // Higher count first
       })
       .slice(0, 20) // Limit to top 20 to ensure it always looks full
-  }, [products, invoices, currentItems, barcodeInput])
+  }, [products, invoices, currentItems])
+
+  const searchResults = useMemo(() => {
+    if (!barcodeInput.trim()) return []
+
+    const searchTerms = barcodeInput.toLowerCase().split(/\s+/).filter(t => t.length > 0)
+    let candidates = products.filter(p => !currentItems.some(item => item.productId === p.id))
+
+    candidates = candidates.filter(p => {
+      const nameLower = p.name.toLowerCase()
+      const barcode = p.barcode
+      if (barcode.includes(barcodeInput)) return true
+      return searchTerms.some(term => nameLower.includes(term))
+    })
+
+    return candidates.sort((a, b) => {
+      let scoreA = 0
+      let scoreB = 0
+      const nameA = a.name.toLowerCase()
+      const nameB = b.name.toLowerCase()
+
+      if (a.barcode === barcodeInput) scoreA += 1000
+      if (b.barcode === barcodeInput) scoreB += 1000
+
+      if (nameA === barcodeInput.toLowerCase()) scoreA += 500
+      if (nameB === barcodeInput.toLowerCase()) scoreB += 500
+
+      searchTerms.forEach(term => {
+        if (nameA.includes(term)) scoreA += 10
+        if (nameB.includes(term)) scoreB += 10
+        if (nameA.startsWith(term)) scoreA += 5
+        if (nameB.startsWith(term)) scoreB += 5
+      })
+
+      return scoreB - scoreA
+    }).slice(0, 10)
+  }, [products, barcodeInput, currentItems])
   useEffect(() => {
     // Fetch products from DB
     const fetchProducts = async () => {
@@ -159,17 +146,7 @@ function FacturasContent() {
     setTimeout(() => setNotification(null), 3000)
   }
 
-  const handleBarcodeSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-
-    const product = products.find((p) => p.barcode === barcodeInput)
-
-    if (!product) {
-      showNotification("Producto no encontrado", "error")
-      setBarcodeInput("")
-      return
-    }
-
+  const addProductToInvoice = (product: Product) => {
     if (product.quantity <= 0) {
       showNotification("Producto sin stock disponible", "error")
       setBarcodeInput("")
@@ -204,6 +181,22 @@ function FacturasContent() {
     showNotification(`${product.name} agregado`, "success")
     setBarcodeInput("")
     barcodeInputRef.current?.focus()
+  }
+
+  const handleBarcodeSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+
+    const product = products.find((p) => p.barcode === barcodeInput)
+
+    if (!product) {
+      // If not exact match, check if there are search results and select the first one if safe?
+      // Or just notify not found if it was intended as a scan
+      showNotification("Producto no encontrado", "error")
+      // Do not clear input so they can keep typing if it was a search
+      return
+    }
+
+    addProductToInvoice(product)
   }
 
   const updateItemQuantity = (productId: string, newQuantity: number) => {
@@ -537,10 +530,29 @@ function FacturasContent() {
                     type="text"
                     value={barcodeInput}
                     onChange={(e) => setBarcodeInput(e.target.value)}
-                    placeholder="Escanear o escribir código de barras..."
+                    placeholder="Escanear o escribir nombre..."
                     className="w-full bg-input border border-border rounded-lg py-3 pl-11 pr-4 text-foreground text-lg placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                     autoFocus
                   />
+                  {/* Autocomplete Dropdown */}
+                  {barcodeInput.trim() && searchResults.length > 0 && (
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-xl overflow-hidden z-50 max-h-60 overflow-y-auto">
+                      {searchResults.map((product) => (
+                        <button
+                          key={product.id}
+                          type="button"
+                          onClick={() => addProductToInvoice(product)}
+                          className="w-full text-left px-4 py-3 hover:bg-muted/50 border-b border-border/50 last:border-0 transition-colors flex justify-between items-center group"
+                        >
+                          <div>
+                            <p className="font-medium text-foreground group-hover:text-primary transition-colors">{product.name}</p>
+                            <p className="text-xs text-muted-foreground">{product.barcode} • Stock: {product.quantity}</p>
+                          </div>
+                          <p className="font-semibold text-foreground">${product.price.toLocaleString()}</p>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <button
                   type="submit"
@@ -594,24 +606,12 @@ function FacturasContent() {
                       <button
                         key={product.id}
                         onClick={() => {
-                          // Directly add to cart instead of just autofilling search
-                          // Logic from handleBarcodeSubmit but simplified for direct click
                           const existingItem = currentItems.find((item) => item.productId === product.id)
                           if (existingItem) {
                             showNotification("El producto ya está en la factura", "error")
                             return
                           }
-
-                          setCurrentItems([
-                            {
-                              productId: product.id,
-                              name: product.name,
-                              price: product.price,
-                              quantity: 1,
-                              barcode: product.barcode,
-                            },
-                            ...currentItems,
-                          ])
+                          addProductToInvoice(product)
                         }}
                         className="w-full flex items-center justify-between p-3 bg-muted/50 hover:bg-muted rounded-lg transition-colors text-left group"
                       >
