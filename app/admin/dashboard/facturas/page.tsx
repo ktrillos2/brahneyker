@@ -135,8 +135,6 @@ function FacturasContent() {
       }
     }
 
-    fetchProducts()
-
     // Load invoices from DB
     const fetchInvoices = async () => {
       try {
@@ -151,6 +149,40 @@ function FacturasContent() {
     fetchProducts()
     fetchInvoices()
   }, [])
+
+  // Local Storage Persistence
+  const [isInitialized, setIsInitialized] = useState(false)
+
+  // Load draft from local storage
+  useEffect(() => {
+    const savedDraft = localStorage.getItem("invoice_draft")
+    if (savedDraft) {
+      try {
+        const parsed = JSON.parse(savedDraft)
+        // Verify structure roughly
+        if (parsed && typeof parsed === 'object') {
+          if (Array.isArray(parsed.items)) setCurrentItems(parsed.items)
+          if (typeof parsed.customerName === 'string') setCustomerName(parsed.customerName)
+          if (typeof parsed.customerPhone === 'string') setCustomerPhone(parsed.customerPhone)
+        }
+      } catch (e) {
+        console.error("Error parsing local storage invoice draft:", e)
+      }
+    }
+    setIsInitialized(true)
+  }, [])
+
+  // Save draft to local storage
+  useEffect(() => {
+    if (!isInitialized) return
+
+    const draft = {
+      items: currentItems,
+      customerName,
+      customerPhone
+    }
+    localStorage.setItem("invoice_draft", JSON.stringify(draft))
+  }, [currentItems, customerName, customerPhone, isInitialized])
 
   const showNotification = (message: string, type: "success" | "error") => {
     setNotification({ message, type })
@@ -713,7 +745,13 @@ function FacturasContent() {
                 {/* Actions */}
                 <div className="flex gap-3 mt-6">
                   <button
-                    onClick={() => setCurrentItems([])}
+                    onClick={() => {
+                      setCurrentItems([])
+                      setCustomerName("")
+                      setCustomerPhone("")
+                      // Optional: explicitly remove from storage, though effect will overwrite with empty generic draft
+                      localStorage.removeItem("invoice_draft")
+                    }}
                     className="flex-1 bg-muted hover:bg-muted/80 text-foreground font-semibold py-3 rounded-lg transition-colors"
                   >
                     Limpiar

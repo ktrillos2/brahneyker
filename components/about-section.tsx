@@ -32,6 +32,7 @@ export function AboutSection() {
                 alt="Cabello lacio perfecto"
                 fill
                 className="object-cover"
+                sizes="(max-width: 768px) 100vw, 50vw"
               />
             </div>
             <div className="relative h-64 lg:h-80 mt-8">
@@ -40,6 +41,7 @@ export function AboutSection() {
                 alt="Ondas perfectas"
                 fill
                 className="object-cover"
+                sizes="(max-width: 768px) 100vw, 50vw"
               />
             </div>
           </div>

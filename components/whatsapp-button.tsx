@@ -22,6 +22,7 @@ export function WhatsAppButton() {
         width={60}
         height={60}
         className="w-14 h-14 object-contain"
+        sizes="60px"
       />
       <span className="absolute right-full mr-3 top-1/2 -translate-y-1/2 bg-background text-foreground px-4 py-2 rounded-lg shadow-lg text-sm font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity border border-primary">
         ¡Escríbenos!

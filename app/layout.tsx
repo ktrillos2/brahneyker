@@ -8,23 +8,25 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter" })
 const playfair = Playfair_Display({ subsets: ["latin"], variable: "--font-playfair" })
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://brahneyker.com'), // Replace with actual domain when known or use VERCEL_URL logic in separate file if strict
+  metadataBase: new URL('https://brahneyker.com'),
   title: {
-    default: "Salón de Belleza Brahneyker | Expertos en Cabello y Uñas en Cúcuta",
+    default: "Salón de Belleza Brahneyker | Peluquería y Estética en Cúcuta",
     template: "%s | Brahneyker Salón de Belleza"
   },
   description:
-    "Descubre Brahneyker en Cúcuta. Más de 20 años de experiencia transformando tu estilo. Especialistas en cortes, colorimetría, balayage, keratina y diseño de uñas.",
+    "Salón de Belleza en Cúcuta con más de 20 años de experiencia. Expertos en balayage, colorimetría, corte de cabello, keratina, manicure y pedicure. ¡Reserva tu cita!",
   keywords: [
     "salón de belleza Cúcuta",
     "peluquería Cúcuta",
-    "estilistas profesionales",
-    "manicura y pedicura",
-    "balayage",
-    "colorimetría",
+    "estilistas en Cúcuta",
     "corte de cabello mujer",
+    "balayage Cúcuta",
+    "colorimetría experta",
     "keratina",
-    "uñas acrílicas",
+    "tratamientos capilares",
+    "manicure y pedicure",
+    "diseño de uñas Cúcuta",
+    "maquillaje profesional",
     "Brahneyker"
   ],
   authors: [{ name: "Brahneyker Team" }],
@@ -36,8 +38,8 @@ export const metadata: Metadata = {
     telephone: false,
   },
   openGraph: {
-    title: "Salón de Belleza Brahneyker | Tu mejor versión",
-    description: "Expertos en realzar tu belleza. Servicios premium de peluquería y estética en Cúcuta.",
+    title: "Salón de Belleza Brahneyker | Expertos en Cabello y Uñas en Cúcuta",
+    description: "Transforma tu imagen con los mejores estilistas de Cúcuta. Especialistas en color, cortes modernos y cuidado de uñas.",
     url: 'https://brahneyker.com',
     siteName: 'Salón de Belleza Brahneyker',
     locale: 'es_CO',
@@ -45,9 +47,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: "Salón de Belleza Brahneyker",
-    description: "Transformamos tu estilo con profesionalismo y pasión en Cúcuta.",
-    creator: "@brahneyker", // Placeholder if they have one
+    title: "Salón de Belleza Brahneyker | Cúcuta",
+    description: "Expertos en belleza y estilismo en Cúcuta. Visítanos en Chapinero, Atalaya.",
+    images: ["/images/freepik-background-93643.png"],
   },
   robots: {
     index: true,

@@ -100,7 +100,7 @@ export function ContactSection() {
                 value={formData.servicio}
                 onValueChange={(value) => setFormData({ ...formData, servicio: value })}
               >
-                <SelectTrigger className="w-full px-4 py-3 h-auto bg-muted border border-border text-foreground focus:ring-1 focus:ring-primary focus:border-primary transition-colors">
+                <SelectTrigger aria-label="Selecciona un servicio" className="w-full px-4 py-3 h-auto bg-muted border border-border text-foreground focus:ring-1 focus:ring-primary focus:border-primary transition-colors">
                   <SelectValue placeholder="Selecciona un servicio" />
                 </SelectTrigger>
                 <SelectContent>
