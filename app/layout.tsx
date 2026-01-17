@@ -44,11 +44,13 @@ export const metadata: Metadata = {
     siteName: 'Salón de Belleza Brahneyker',
     locale: 'es_CO',
     type: 'website',
+    images: ["/images/og-image.png"],
   },
   twitter: {
     card: 'summary_large_image',
     title: "Salón de Belleza Brahneyker | Cúcuta",
     description: "Expertos en belleza y estilismo en Cúcuta. Visítanos en Chapinero, Atalaya.",
+    images: ["/images/og-image.png"],
   },
   robots: {
     index: true,

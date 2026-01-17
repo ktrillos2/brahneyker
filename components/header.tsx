@@ -33,16 +33,8 @@ export function Header() {
     >
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-20 md:h-24">
-          <Link href="/" className="relative w-48 md:w-64 h-14 md:h-16">
-            <Logo showText={false} className="scale-125" />
-            <div className="ml-3 flex flex-col justify-center">
-              <span className="font-serif text-xl md:text-2xl font-bold text-foreground leading-none tracking-tight">
-                Brahneyker
-              </span>
-              <span className="text-[0.6rem] tracking-[0.2em] uppercase text-muted-foreground leading-tight">
-                Sala de Belleza
-              </span>
-            </div>
+          <Link href="/" className="relative w-48 md:w-64 h-14 md:h-16 flex items-center">
+            <Logo showText={false} className="w-full h-full" />
           </Link>
 
           {/* Desktop Navigation */}
