@@ -6,6 +6,7 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { Eye, EyeOff, Lock, User } from "lucide-react"
+import { Logo } from "@/components/logo"
 import { loginAction } from "@/app/actions/auth"
 
 export default function AdminLoginPage() {
@@ -35,13 +36,7 @@ export default function AdminLoginPage() {
         <div className="bg-card border border-border rounded-2xl p-8 shadow-2xl">
           {/* Logo */}
           <div className="flex justify-center mb-8">
-            <Image
-              src="/images/freepik-background-93643.png"
-              alt="Brahneyker Logo"
-              width={200}
-              height={100}
-              className="object-contain"
-            />
+            <Logo className="scale-150" />
           </div>
 
           <h1 className="text-2xl font-serif text-center text-foreground mb-2">Panel de Administración</h1>

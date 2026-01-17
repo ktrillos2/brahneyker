@@ -49,7 +49,6 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: "Salón de Belleza Brahneyker | Cúcuta",
     description: "Expertos en belleza y estilismo en Cúcuta. Visítanos en Chapinero, Atalaya.",
-    images: ["/images/freepik-background-93643.png"],
   },
   robots: {
     index: true,
@@ -63,9 +62,7 @@ export const metadata: Metadata = {
     },
   },
   icons: {
-    icon: "/images/freepik-background-93643.png",
-    shortcut: "/images/freepik-background-93643.png",
-    apple: "/images/freepik-background-93643.png",
+    // Next.js will automatically use app/icon.tsx
   },
 }
 

@@ -1,5 +1,6 @@
 import Image from "next/image"
 import { Phone, MapPin, Clock } from "lucide-react"
+import { Logo } from "./logo"
 
 export function Footer() {
   return (
@@ -9,13 +10,7 @@ export function Footer() {
           {/* Logo & Description */}
           <div>
             <div className="mb-6">
-              <Image
-                src="/images/freepik-background-93643.png"
-                alt="Brahneyker Sala de Belleza"
-                width={300}
-                height={80}
-                className="w-auto h-20 object-contain"
-              />
+              <Logo className="scale-110 origin-left" />
             </div>
             <p className="text-foreground/60 text-sm leading-relaxed">
               Más de 20 años realzando tu belleza con maestría. Tu satisfacción es nuestra mayor recompensa.
