@@ -36,7 +36,7 @@ export default function AdminLoginPage() {
         <div className="bg-card border border-border rounded-2xl p-8 shadow-2xl">
           {/* Logo */}
           <div className="flex justify-center mb-8">
-            <Logo className="scale-150" />
+            <Logo className="w-72 h-36" />
           </div>
 
           <h1 className="text-2xl font-serif text-center text-foreground mb-2">Panel de Administración</h1>

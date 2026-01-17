@@ -10,7 +10,7 @@ export function Footer() {
           {/* Logo & Description */}
           <div>
             <div className="mb-6">
-              <Logo className="scale-110 origin-left" />
+              <Logo className="w-56 h-24 scale-110 origin-left" />
             </div>
             <p className="text-foreground/60 text-sm leading-relaxed">
               Más de 20 años realzando tu belleza con maestría. Tu satisfacción es nuestra mayor recompensa.

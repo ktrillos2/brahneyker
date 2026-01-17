@@ -2,8 +2,8 @@
 
 import { useState } from "react"
 import { usePathname, useRouter } from "next/navigation"
-import Image from "next/image"
 import Link from "next/link"
+import { Logo } from "@/components/logo"
 import { Package, FileText, Calendar, LayoutDashboard, LogOut, Menu } from "lucide-react"
 import { logoutAction } from "../../app/actions/auth"
 
@@ -38,14 +38,8 @@ export default function DashboardShell({ children }: { children: React.ReactNode
             >
                 <div className="flex flex-col h-full">
                     {/* Logo */}
-                    <div className="p-6 border-b border-border">
-                        <Image
-                            src="/images/freepik-background-93643.png"
-                            alt="Brahneyker Logo"
-                            width={180}
-                            height={90}
-                            className="object-contain mx-auto"
-                        />
+                    <div className="p-6 border-b border-border flex justify-center">
+                        <Logo className="w-60 h-32" />
                     </div>
 
                     {/* Navigation */}
@@ -58,8 +52,8 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                                     href={item.href}
                                     onClick={() => setSidebarOpen(false)}
                                     className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${isActive
-                                            ? "bg-primary text-primary-foreground"
-                                            : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                                        ? "bg-primary text-primary-foreground"
+                                        : "text-muted-foreground hover:text-foreground hover:bg-muted"
                                         }`}
                                 >
                                     <item.icon className="w-5 h-5" />
