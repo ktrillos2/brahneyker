@@ -50,7 +50,7 @@ export function AboutSection() {
           <div>
             <span className="text-primary font-serif text-sm tracking-[0.3em] uppercase">Sobre Nosotros</span>
             <h2 className="font-serif text-3xl md:text-4xl lg:text-5xl text-foreground mt-4 mb-6">
-              Una Década de <span className="text-primary italic">Excelencia</span>
+              Más de una Década de <span className="text-primary italic">Excelencia</span>
             </h2>
             <div className="w-16 h-[1px] bg-primary mb-8" />
             <p className="text-foreground/70 leading-relaxed mb-6">
