@@ -2,6 +2,7 @@ import type React from "react"
 import type { Metadata } from "next"
 import { Inter, Playfair_Display } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
+import { TikTokPixel } from "@/components/tiktok-pixel"
 import "./globals.css"
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" })
@@ -75,6 +76,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es">
+      <head>
+        <TikTokPixel />
+      </head>
       <body className={`${inter.variable} ${playfair.variable} font-sans antialiased`}>
         {children}
         <Analytics />
