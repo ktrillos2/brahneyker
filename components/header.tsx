@@ -33,7 +33,7 @@ export function Header() {
     >
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-20 md:h-24">
-          <Link href="/" className="relative w-60 md:w-80 h-16 md:h-20 flex items-center">
+          <Link href="/" className="relative w-72 md:w-96 h-20 md:h-28 flex items-center">
             <Logo showText={false} className="w-full h-full" />
           </Link>
 
