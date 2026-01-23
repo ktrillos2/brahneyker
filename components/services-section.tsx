@@ -18,12 +18,12 @@ export function ServicesSection() {
       description: "Hidratación, anticaídas y tratamientos especializados",
     },
     {
-      image: "/images/trabajos/548927056_18417926497107436_6064707575074199673_n.heic",
+      image: "/images/trabajos/alisados-service.png",
       title: "Alisados Permanentes",
       description: "Cabello liso, sedoso y brillante con tratamientos de última generación",
     },
     {
-      image: "/images/565430127-18423412708107436-2238141757400346214-n.jpeg",
+      image: "/images/trabajos/tintes-service.jpg",
       title: "Tintes",
       description: "Coloración profesional con productos de alta calidad",
     },
@@ -41,12 +41,12 @@ export function ServicesSection() {
       description: "Depilación profesional con cera de alta calidad",
     },
     {
-      image: "/images/trabajos/571990890_18426264058107436_8643788370670007068_n.heic",
+      image: "/images/trabajos/cejas-pestanas-service.png",
       title: "Cejas y Pestañas",
       description: "Diseño y perfilado de cejas, tinte de pestañas",
     },
     {
-      image: "/images/611709326-18436607719107436-3531632225455469513-n.jpeg",
+      image: "/images/trabajos/maquillaje-service.png",
       title: "Maquillaje",
       description: "Maquillaje profesional para cualquier ocasión",
     },
@@ -59,7 +59,7 @@ export function ServicesSection() {
       description: "Cuidado completo de manos y pies",
     },
     {
-      image: "/images/trabajos/610306027_18436606909107436_5992021347149903798_n.heic",
+      image: "/images/trabajos/polygel-service.png",
       title: "Polygel",
       description: "Uñas resistentes y naturales con polygel",
     },
@@ -69,12 +69,12 @@ export function ServicesSection() {
       description: "Esmalte de larga duración con brillo perfecto",
     },
     {
-      image: "/images/trabajos/610793716_18436605361107436_1540132779786533581_n.heic",
+      image: "/images/trabajos/unas-tradicionales-service.png",
       title: "Uñas Tradicionales",
       description: "Manicure clásico con acabados impecables",
     },
     {
-      image: "/images/trabajos/610855802_18436605295107436_8537707720082430640_n.heic",
+      image: "/images/trabajos/unas-acrilicas-service.png",
       title: "Uñas Acrílicas",
       description: "Diseños personalizados con acrílico de alta calidad",
     },
