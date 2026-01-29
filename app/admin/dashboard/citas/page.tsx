@@ -35,6 +35,21 @@ const timeSlots = [
   "14:00", "15:00", "16:00", "17:00", "18:00", "19:00"
 ]
 
+// Generate 15-minute intervals for the modal
+const generateTimeSlots = (startHour: number, endHour: number, intervalMinutes: number) => {
+  const slots = []
+  for (let hour = startHour; hour <= endHour; hour++) {
+    for (let minute = 0; minute < 60; minute += intervalMinutes) {
+      if (hour === endHour && minute > 0) break
+      const time = `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`
+      slots.push(time)
+    }
+  }
+  return slots
+}
+
+const modalTimeSlots = generateTimeSlots(8, 19, 15)
+
 const stylists = ["Damaris", "Fabiola"] as const
 
 const statusColors = {
@@ -299,32 +314,23 @@ export default function CitasPage() {
                       </div>
                       {/* Days Cells */}
                       {weekDays.map((date, i) => {
-                        // FIX: Use local date construction instead of ISO string (which uses UTC)
                         const year = date.getFullYear()
                         const month = String(date.getMonth() + 1).padStart(2, '0')
                         const day = String(date.getDate()).padStart(2, '0')
                         const dateStr = `${year}-${month}-${day}`
 
-                        const currentSlotTime = timeToMinutes(time)
+                        const currentSlotStart = timeToMinutes(time)
+                        const currentSlotEnd = currentSlotStart + 60
 
-                        // Find appointment that covers this slot
-                        const apt = appointments.find(a => {
-                          const aptDate = a.date
-                          if (aptDate !== dateStr || a.stylist !== stylist) return false
+                        // Find all appointments that overlap with this slot
+                        const slotAppointments = appointments.filter(a => {
+                          if (a.date !== dateStr || a.stylist !== stylist) return false
+                          const aptStart = timeToMinutes(a.time)
+                          const aptEnd = aptStart + (a.duration || 60)
 
-                          const start = timeToMinutes(a.time)
-                          const end = start + (a.duration || 60)
-
-                          return currentSlotTime >= start && currentSlotTime < end
+                          // Check intersection: start < end && end > start
+                          return Math.max(currentSlotStart, aptStart) < Math.min(currentSlotEnd, aptEnd)
                         })
-
-                        const start = apt ? timeToMinutes(apt.time) : 0
-                        const end = apt ? start + (apt.duration || 60) : 0
-
-                        const isHead = apt && start === currentSlotTime
-                        const isTail = apt && currentSlotTime + 60 === end
-                        const isMiddle = apt && !isHead && !isTail
-                        const isSingle = isHead && isTail
 
                         const isToday = now ? now.toDateString() === date.toDateString() : false
 
@@ -333,41 +339,59 @@ export default function CitasPage() {
                             key={i}
                             className={`relative min-h-[60px] border-r border-border last:border-r-0 group ${isToday ? 'bg-primary/5' : ''}`}
                           >
-                            {apt ? (
-                              <div
-                                onClick={() => handleOpenModal(undefined, undefined, undefined, apt)}
-                                className={`
-                                                            mx-1 relative z-10 cursor-pointer hover:opacity-90 transition-opacity ${statusColors[apt.status]}
-                                                            ${isHead ? 'mt-1 rounded-t-lg' : 'mt-0 border-t-0 rounded-t-none'}
-                                                            ${isTail ? 'mb-1 rounded-b-lg' : 'mb-0 border-b-0 rounded-b-none'}
-                                                            ${isSingle ? 'rounded-lg' : ''}
-                                                            flex flex-col justify-center
-                                                            h-[calc(100%-4px)]
-                                                        `}
-                                style={{
-                                  height: isSingle ? 'calc(100% - 8px)' : isHead ? 'calc(100% - 4px)' : isTail ? 'calc(100% - 4px)' : '100%',
-                                  marginTop: isHead || isSingle ? '4px' : '0',
-                                  marginBottom: isTail || isSingle ? '4px' : '0'
-                                }}
-                              >
-                                {isHead && (
-                                  <div className="p-2 text-xs">
-                                    <div className="flex items-center gap-1 font-semibold mb-1">
-                                      <Clock className="w-3 h-3" />
-                                      {formatTime(apt.time)} {apt.duration > 60 && `- ${apt.duration / 60}h`}
+                            {slotAppointments.map(apt => {
+                              const aptStart = timeToMinutes(apt.time)
+                              const aptEnd = aptStart + (apt.duration || 60)
+
+                              // Calculate position relative to this slot
+                              const startInSlot = Math.max(currentSlotStart, aptStart)
+                              const endInSlot = Math.min(currentSlotEnd, aptEnd)
+                              const durationInSlot = endInSlot - startInSlot
+
+                              const top = ((startInSlot - currentSlotStart) / 60) * 100
+                              const height = (durationInSlot / 60) * 100
+
+                              const isHead = aptStart >= currentSlotStart
+                              const isTail = aptEnd <= currentSlotEnd
+
+                              return (
+                                <div
+                                  key={apt.id}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleOpenModal(undefined, undefined, undefined, apt)
+                                  }}
+                                  className={`
+                                    absolute left-1 right-1 z-10 cursor-pointer hover:opacity-90 transition-opacity ${statusColors[apt.status]}
+                                    ${isHead ? 'rounded-t-lg' : 'rounded-t-none border-t-0'}
+                                    ${isTail ? 'rounded-b-lg' : 'rounded-b-none border-b-0'}
+                                    flex flex-col justify-center px-1 overflow-hidden
+                                  `}
+                                  style={{
+                                    top: `${top}%`,
+                                    height: `${height}%`,
+                                  }}
+                                >
+                                  {isHead && (
+                                    <div className="p-1 text-[10px] leading-tight">
+                                      <div className="flex items-center gap-1 font-semibold">
+                                        <Clock className="w-3 h-3" />
+                                        {formatTime(apt.time)}
+                                      </div>
+                                      <div className="font-medium truncate">{apt.details}</div>
                                     </div>
-                                    <div className="font-medium line-clamp-2 leading-tight">{apt.details}</div>
-                                  </div>
-                                )}
-                              </div>
-                            ) : (
-                              <button
-                                onClick={() => handleOpenModal(date, time, stylist)}
-                                className="w-[calc(100%-8px)] h-[calc(100%-8px)] m-1 opacity-0 group-hover:opacity-100 flex items-center justify-center hover:bg-primary/10 rounded transition-all"
-                              >
-                                <Plus className="w-4 h-4 text-primary" />
-                              </button>
-                            )}
+                                  )}
+                                </div>
+                              )
+                            })}
+
+                            {/* Add Button - Visible on hover, behind appointments */}
+                            <button
+                              onClick={() => handleOpenModal(date, time, stylist)}
+                              className="absolute inset-0 w-full h-full opacity-0 group-hover:opacity-100 flex items-center justify-center hover:bg-primary/10 transition-all z-0"
+                            >
+                              <Plus className="w-4 h-4 text-primary" />
+                            </button>
                           </div>
                         )
                       })}
@@ -436,11 +460,13 @@ export default function CitasPage() {
                     required
                   >
                     <option value="">Seleccionar hora</option>
-                    {timeSlots.map((time) => {
+                    {modalTimeSlots.map((time) => {
                       // Check overlap
                       // Convert specific slot time to minutes
                       const slotStart = timeToMinutes(time)
-                      const slotEnd = slotStart + 60 // Assuming grid slots are 60m
+                      const slotEnd = slotStart + 15 // Check just the start time availability (or implicit 15m slot?)
+                      // Actually, we should check if THIS start time + intended duration conflicts. 
+                      // But here we're just disabling start times that are INSIDE an existing appointment.
 
                       const isOccupied = appointments.some((a) => {
                         // Skip if editing the same appointment
@@ -452,8 +478,9 @@ export default function CitasPage() {
                         const aptStart = timeToMinutes(a.time)
                         const aptEnd = aptStart + (a.duration || 60)
 
-                        // Check overlap
-                        return Math.max(slotStart, aptStart) < Math.min(slotEnd, aptEnd)
+                        // Check if this specific start time is inside another appointment
+                        // Usage: Is the SlotStart inside [aptStart, aptEnd)?
+                        return slotStart >= aptStart && slotStart < aptEnd
                       })
 
                       return (
