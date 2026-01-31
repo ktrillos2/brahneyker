@@ -1,4 +1,4 @@
-const API_KEY = "AIzaSyA4aIYfwnPC22_z5Q2ZOSlLQEwXfjlMgco";
+const API_KEY = process.env.GEMINI_API_KEY || "YOUR_KEY_HERE";
 const MODEL_NAME = "gemini-1.5-flash-001";
 
 async function testGemini() {

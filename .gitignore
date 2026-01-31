@@ -25,3 +25,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+# Test scripts
+test-gemini-direct.js
+test-local.js
+test-conversation.js
