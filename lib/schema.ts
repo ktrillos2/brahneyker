@@ -32,6 +32,8 @@ export const appointments = sqliteTable("appointments", {
     details: text("details").notNull(),
     stylist: text("stylist").notNull(), // "Damaris" | "Fabiola"
     status: text("status").notNull().default("pendiente"), // "pendiente" | "confirmada" | "completada" | "cancelada"
+    clientName: text("client_name"),
+    clientPhone: text("client_phone"),
     createdAt: text("created_at").default(sql`(CURRENT_TIMESTAMP)`),
 })
 
@@ -55,3 +57,4 @@ export const invoiceItems = sqliteTable("invoice_items", {
     quantity: integer("quantity").notNull(),
     price: real("price").notNull(),
 })
+
