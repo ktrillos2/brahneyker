@@ -10,6 +10,7 @@
     "db:push": "drizzle-kit push --config=drizzle.config.ts"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@hookform/resolvers": "^3.10.0",
     "@libsql/client": "^0.17.0",
     "@radix-ui/react-accordion": "1.2.2",
@@ -70,6 +71,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.9",
     "@types/bcryptjs": "^3.0.0",
+    "@types/dotenv": "^8.2.3",
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
