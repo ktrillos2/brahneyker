@@ -34,7 +34,17 @@ export const appointments = sqliteTable("appointments", {
     status: text("status").notNull().default("pendiente"), // "pendiente" | "confirmada" | "completada" | "cancelada"
     clientName: text("client_name"),
     clientPhone: text("client_phone"),
+    serviceType: text("service_type"),
+    serviceDetail: text("service_detail"),
     createdAt: text("created_at").default(sql`(CURRENT_TIMESTAMP)`),
+})
+
+// Conversation State Table (Bot Flow)
+export const conversationState = sqliteTable("conversation_state", {
+    phone: text("phone").primaryKey(),
+    step: text("step").default('IDLE'), // 'SERVICE_SELECTION', 'NAIL_TYPE', 'PROFESSIONAL', 'DATE_TIME'
+    tempData: text("temp_data"), // JSON string
+    lastUpdated: text("last_updated").default(sql`(CURRENT_TIMESTAMP)`),
 })
 
 // Invoices Table
