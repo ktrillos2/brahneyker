@@ -1,6 +1,6 @@
 const PORT = 3001;
 const BASE_URL = `http://localhost:${PORT}/api/webhook-whatsapp`;
-const PHONE_NUMBER = "573133087069"; // Número de prueba para flujo limpio
+const PHONE_NUMBER = "573007778899"; // Nuevo número para probar One-Shot
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -13,7 +13,7 @@ async function sendMessage(text) {
             body: JSON.stringify({
                 phone: PHONE_NUMBER,
                 text: text,
-                name: "Tester Rules"
+                name: "Tester OneShot"
             })
         });
 
@@ -26,26 +26,17 @@ async function sendMessage(text) {
 }
 
 async function runTest() {
-    console.log("🚀 Iniciando Simulación de Reglas (Sin IA)...");
+    console.log("🚀 Iniciando Simulación Híbrida (One Shot)...");
 
     // 1. Reset / Saludo
     await sendMessage("Hola");
     await sleep(1000);
 
-    // 2. Elegir Uñas (Opción 1)
-    await sendMessage("1");
-    await sleep(1000);
-
-    // 3. Elegir Polygel (Opción A)
-    await sendMessage("A");
-    await sleep(1000);
-
-    // 4. Elegir Fabiola (Opción 1)
-    await sendMessage("1");
-    await sleep(1000);
-
-    // 5. Fecha
-    await sendMessage("Mañana a las 3pm");
+    // 2. ONE SHOT: Todo en uno
+    // "Quiero uñas semipermanentes con Fabiola para mañana a las 10am"
+    // El sistema debería detector: Intent=NAILS, Service=Semi, Stylist=Fabiola, Date=Mañana 10am
+    // Y responder con Confirmación directa o Bloqueo por horario.
+    await sendMessage("Quiero uñas semipermanentes con Fabiola para mañana a las 10am");
 }
 
 runTest();
