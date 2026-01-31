@@ -1,8 +1,7 @@
-const PORT = 3001; // Asegúrate de que coincida con tu 'npm run dev' (vimos que era 3001)
+const PORT = 3001;
 const BASE_URL = `http://localhost:${PORT}/api/webhook-whatsapp`;
-const PHONE_NUMBER = "573000123456"; // Un número de prueba consistente
+const PHONE_NUMBER = "573133087069"; // Número de prueba para flujo limpio
 
-// Helper para esperar
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 async function sendMessage(text) {
@@ -13,16 +12,13 @@ async function sendMessage(text) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 phone: PHONE_NUMBER,
-                text: text, // La clave correcta esperamos que sea 'text' o 'message' según tu gateway, mi código usa 'text'
-                name: "Tester Local"
+                text: text,
+                name: "Tester Rules"
             })
         });
 
-        const data = await response.text();
-        // A veces el webhook no devuelve el texto directo sino que lo manda al gateway.
-        // Pero mi código imprime logs en la terminal de 'npm run dev'.
-        // Sin embargo, si el webhook responde JSON, lo mostramos.
-        console.log(`🤖 BOT (Status ${response.status}): ${data}`);
+        const data = await response.json();
+        console.log(`🤖 SERVER:`, data);
         return data;
     } catch (e) {
         console.error("Error envío:", e.message);
@@ -30,21 +26,26 @@ async function sendMessage(text) {
 }
 
 async function runTest() {
-    console.log("🚀 Iniciando Simulación de Chat con Gemini 2.5...");
+    console.log("🚀 Iniciando Simulación de Reglas (Sin IA)...");
 
-    // 1. Saludo
+    // 1. Reset / Saludo
     await sendMessage("Hola");
+    await sleep(1000);
 
-    await sleep(2000); // Esperar un poco
+    // 2. Elegir Uñas (Opción 1)
+    await sendMessage("1");
+    await sleep(1000);
 
-    // 2. Consulta de servicio con contexto (memoria)
-    await sendMessage("Quiero una cita de uñas semipermanentes");
+    // 3. Elegir Polygel (Opción A)
+    await sendMessage("A");
+    await sleep(1000);
 
-    await sleep(2000);
+    // 4. Elegir Fabiola (Opción 1)
+    await sendMessage("1");
+    await sleep(1000);
 
-    // 3. Intento de agendamiento (Prueba de lógica de fechas)
-    // "Mañana a las 10am" -> Gemini debe calcular la fecha real
-    await sendMessage("Que sea con Fabiola para mañana a las 10am");
+    // 5. Fecha
+    await sendMessage("Mañana a las 3pm");
 }
 
 runTest();

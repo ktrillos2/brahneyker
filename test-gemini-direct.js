@@ -1,5 +1,5 @@
 const API_KEY = process.env.GEMINI_API_KEY || "YOUR_KEY_HERE";
-const MODEL_NAME = "gemini-1.5-flash-001";
+const MODEL_NAME = "gemini-2.5-flash-001";
 
 async function testGemini() {
     console.log(`Testing Gemini API direct fetch...`);

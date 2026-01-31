@@ -2,16 +2,11 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { appointments, conversationState } from '@/lib/schema'
 import { eq, and, not } from 'drizzle-orm'
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import * as chrono from 'chrono-node'
 
 // --- Configuration ---
 const GATEWAY_URL = "http://3.21.167.162:3000/send-message"
 const GATEWAY_SECRET = "KYT_SECRET_2026"
-
-// Initialize Gemini
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "")
-const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
-
 
 // --- Helper Functions ---
 
@@ -27,52 +22,43 @@ async function sendToGateway(phone: string, message: string) {
                 secret: GATEWAY_SECRET
             })
         })
-
-        if (!response.ok) {
-            console.error(`[Gateway] Error: ${response.status} ${response.statusText}`)
-        }
+        if (!response.ok) console.error(`[Gateway] Error: ${response.status}`)
     } catch (error) {
         console.error("[Gateway] Network error:", error)
     }
 }
 
-async function getHistory(phone: string) {
+async function getState(phone: string) {
     const record = await db.select().from(conversationState).where(eq(conversationState.phone, phone))
-    if (record.length === 0) return []
-
-    try {
-        const data = JSON.parse(record[0].tempData || "{}")
-        return data.history || []
-    } catch {
-        return []
+    if (record.length === 0) return null
+    return {
+        step: record[0].step,
+        data: JSON.parse(record[0].tempData || "{}")
     }
 }
 
-async function saveHistory(phone: string, role: "user" | "model", text: string) {
-    // We append to existing history
-    const existing = await getHistory(phone)
-    const newHistory = [...existing, { role, parts: [{ text }] }]
+async function updateState(phone: string, step: string, data: any = {}) {
+    const existing = await getState(phone)
+    const newData = { ...(existing?.data || {}), ...data }
 
-    // Store in DB
-    // Check if record exists first (simple upsert logic equivalent)
-    const record = await db.select().from(conversationState).where(eq(conversationState.phone, phone))
-
-    if (record.length > 0) {
+    // Check if record exists
+    if (existing) {
         await db.update(conversationState).set({
-            tempData: JSON.stringify({ history: newHistory }),
+            step,
+            tempData: JSON.stringify(newData),
             lastUpdated: new Date().toISOString()
         }).where(eq(conversationState.phone, phone))
     } else {
         await db.insert(conversationState).values({
             phone,
-            step: 'AI_CHAT',
-            tempData: JSON.stringify({ history: newHistory }),
+            step,
+            tempData: JSON.stringify(newData),
             lastUpdated: new Date().toISOString()
         })
     }
 }
 
-async function clearHistory(phone: string) {
+async function clearState(phone: string) {
     await db.delete(conversationState).where(eq(conversationState.phone, phone))
 }
 
@@ -81,221 +67,168 @@ async function clearHistory(phone: string) {
 export async function POST(req: Request) {
     try {
         const body = await req.json()
-        const { phone, text, name } = body
+        const { phone, text, name, isGroup } = body
+
+        // Ignore Groups
+        if (isGroup) {
+            console.log(`[Bot] Ignoring Group Message from ${phone}`)
+            return NextResponse.json({ status: "ignored_group" })
+        }
 
         if (!phone || !text) {
             return NextResponse.json({ error: "Missing phone or text" }, { status: 400 })
         }
 
+        console.log(`[Bot] From: ${phone}, Msg: "${text}"`)
 
+        // 1. Get Current State
+        const state = await getState(phone)
+        const currentStep = state?.step || 'WELCOME'
+        const cleanText = text.trim().toLowerCase()
 
-        // 2. Chat with Gemini
-        // Load history
-        const record = await db.select().from(conversationState).where(eq(conversationState.phone, phone))
-
-        // 0. Check Handoff State
-        if (record.length > 0) {
-            const currentData = JSON.parse(record[0].tempData || "{}")
-            // If already in handoff code 'HUMAN_HANDOFF', do not reply
-            if (record[0].step === 'HUMAN_HANDOFF') {
-                console.log(`[AI Bot] Ignoring ${phone} (Human Handoff Active)`)
-                return NextResponse.json({ status: "ignored", reason: "human_handoff" })
-            }
+        // 2. Global "Reset" or "Hello" check (optional, but good for UX)
+        if (['hola', 'reiniciar', 'inicio', 'menu'].includes(cleanText)) {
+            await updateState(phone, 'WELCOME', {})
+            await sendToGateway(phone, "👋 ¡Hola! Bienvenido a Brahneyker 💅.\n\n¿En qué podemos ayudarte hoy?\n\n1️⃣ Agendar Cita de Uñas\n2️⃣ Otro Servicio (Cejas, Pelo, Info)")
+            return NextResponse.json({ status: "success" })
         }
 
-        console.log(`[AI Bot] From: ${phone}, Msg: "${text}"`)
+        // 3. State Machine
+        switch (currentStep) {
+            case 'HUMAN_HANDOFF':
+                console.log(`[Bot] Ignoring ${phone} (Human Handoff Active)`)
+                return NextResponse.json({ status: "ignored", reason: "handoff" })
 
-        // 1. Prepare Context
-        const now = new Date().toLocaleString("en-US", { timeZone: "America/Bogota" })
+            case 'WELCOME':
+                if (cleanText.includes('1') || cleanText.includes('uñas') || cleanText.includes('una') || cleanText.includes('cita')) {
+                    await updateState(phone, 'SELECT_SERVICE')
+                    await sendToGateway(phone, "💅 ¡Excelente elección! ¿Qué tipo de servicio deseas?\n\nA. Polygel\nB. Semipermanente\nC. Tradicional\n\n(Responde A, B o C)")
+                } else if (cleanText.includes('2') || cleanText.includes('otro') || cleanText.includes('cejas') || cleanText.includes('pelo')) {
+                    await updateState(phone, 'HUMAN_HANDOFF')
+                    await sendToGateway(phone, "Entendido. Un asesor humano 👩‍💻 te escribirá pronto para ayudarte con ese servicio.\n\n(Este chat quedará en espera hasta que te contacten).")
+                } else {
+                    await sendToGateway(phone, "Disculpa, no entendí. Por favor responde:\n1️⃣ Para Uñas\n2️⃣ Para Otro Servicio")
+                }
+                break
 
-        const systemPrompt = `
-Eres Brahneyker, la asistente virtual de 'Brahneyker' en Cúcuta, Colombia.
-Usa un tono MUY FORMAL, profesional y elegante ("Usted").
+            case 'SELECT_SERVICE':
+                let service = ""
+                if (cleanText.includes('a') || cleanText.includes('polygel')) service = "Uñas Polygel"
+                else if (cleanText.includes('b') || cleanText.includes('semi')) service = "Uñas Semipermanentes"
+                else if (cleanText.includes('c') || cleanText.includes('tradi')) service = "Uñas Tradicional"
 
-TU PRIMERA MISIÓN ES FILTRAR:
-1. Al inicio, saluda y pregunta explícitamente si desea "Agendar cita de Uñas" o "Otro servicio".
-2. Si el usuario indica "Uñas" (o manicura, pedicura, etc), procede con el agendamiento normal.
-3. Si el usuario indica "Otro servicio" (cejas, cabello, info general, preguntas complejas), NO respondas más preguntas.
-   Debes responder ÚNICAMENTE este JSON exacto:
-   { "action": "HANDOFF" }
+                if (service) {
+                    await updateState(phone, 'SELECT_STYLIST', { service })
+                    await sendToGateway(phone, `✅ Has elegido: ${service}.\n\n¿Con qué profesional te gustaría agendar?\n\n1. Fabiola\n2. Damaris`)
+                } else {
+                    await sendToGateway(phone, "Por favor elige una opción válida:\nA. Polygel\nB. Semipermanente\nC. Tradicional")
+                }
+                break
 
-TU SEGUNDA MISIÓN (Solo si es Uñas):
-Obtener:
-1. Servicio/Técnica (Polygel, Semipermanente).
-2. Profesional (Fabiola o Damaris).
-3. Fecha y Hora.
+            case 'SELECT_STYLIST':
+                let stylist = ""
+                if (cleanText.includes('1') || cleanText.includes('fabiola')) stylist = "Fabiola"
+                else if (cleanText.includes('2') || cleanText.includes('damaris')) stylist = "Damaris"
 
-Tus Servicios de Uñas: Técnicas Polygel ($80k), Semipermanente ($40k), Tradicional ($20k).
-Tus Profesionales: Fabiola y Damaris.
-Horario: Lunes a Sábado, 8am a 8pm.
-Fecha Actual: ${now}
+                if (stylist) {
+                    await updateState(phone, 'SELECT_DATE', { stylist })
+                    await sendToGateway(phone, `✨ Perfecto, ${stylist} te atenderá.\n\nPor favor escribe la **Fecha y Hora** deseada.\nEjemplos:\n- "Mañana a las 3pm"\n- "El viernes a las 10 de la mañana"\n- "25 de febrero 4pm"`)
+                } else {
+                    await sendToGateway(phone, "Por favor elige una profesional:\n1. Fabiola\n2. Damaris")
+                }
+                break
 
-REGLAS DE RESPUESTA FINAL (Solo si tienes todos los datos de uñas):
-Responde ÚNICAMENTE este JSON:
-{ 
-    "action": "CHECK_AVAILABILITY", 
-    "stylist": "Fabiola", 
-    "date": "2026-02-01 15:00:00", 
-    "service_detail": "Polygel" 
-}
-`
+            case 'SELECT_DATE':
+                // Parse date with chrono-node
+                const parsedDate = chrono.es.parseDate(text, new Date(), { forwardDate: true })
 
-        // 2. Chat with Gemini
-        // Load history helper
-        let history = await getHistory(phone)
+                if (!parsedDate) {
+                    await sendToGateway(phone, "⚠️ No pude entender la fecha. Por favor intenta un formato más claro, ej: 'Mañana 3pm' o 'Lunes 10am'.")
+                    return NextResponse.json({ status: "success" })
+                }
 
-        const chat = model.startChat({
-            history: [
-                {
-                    role: "user",
-                    parts: [{ text: systemPrompt }]
-                },
-                {
-                    role: "model",
-                    parts: [{ text: "Comprendido. Saludos cordiales, soy Brahneyker. ¿Desea agendar una cita para el cuidado de sus uñas o requiere algún otro servicio?" }]
-                },
-                ...history
-            ]
-        })
+                // Check availability
+                const pendingData = state?.data || {}
+                const { service: reqService, stylist: reqStylist } = pendingData
 
-        let responseText = ""
-        try {
-            const result = await chat.sendMessage(text)
-            responseText = result.response.text()
-        } catch (aiError) {
-            console.error("[Gemini API Error]:", aiError)
-            const fallbackMsg = "✨ Hola! Mi cerebro de IA está recibiendo una actualización. 🤖💅\n\nPor favor intenta en unos minutos o contáctanos directamente para agendar."
-            await sendToGateway(phone, fallbackMsg)
-            return NextResponse.json({ status: "success", warning: "AI unavailable" })
-        }
+                // Format check logic
+                // YYYY-MM-DD
+                const datePart = parsedDate.toISOString().split('T')[0]
+                // HH:MM
+                const h = parsedDate.getHours()
+                const m = parsedDate.getMinutes()
+                const timePart = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
 
-        // 3. Process Response
-        console.log(`[Gemini Response]: ${responseText}`)
+                // Validate Business Hours (8am - 8pm)
+                if (h < 8 || h >= 20) {
+                    await sendToGateway(phone, `🚫 Lo siento, nuestro horario es de 8:00 AM a 8:00 PM. Intentaste agendar a las ${timePart}. Por favor elige otra hora.`)
+                    return NextResponse.json({ status: "success" })
+                }
 
-        let finalMessage = responseText
+                console.log(`Checking DB for ${reqStylist} at ${datePart} ${timePart}`)
 
-        // Check if response is JSON (Action)
-        let actionData = null
-        try {
-            // Try to find JSON block in case it wrapped it in ```json
-            const jsonMatch = responseText.match(/\{[\s\S]*\}/)
-            if (jsonMatch) {
-                actionData = JSON.parse(jsonMatch[0])
-            }
-        } catch (e) {
-            // Not JSON, normal text
-        }
+                const reqStart = h * 60 + m
+                const reqEnd = reqStart + 60 // 1 hour duration default
 
-        if (actionData && actionData.action === "CHECK_AVAILABILITY") {
-            // 4. DB Check
-            const { stylist, date, service_detail } = actionData
-
-            // Parse date string (Expected: YYYY-MM-DD HH:MM:SS)
-            // We only need Date (YYYY-MM-DD) and Time (HH:MM)
-            const [datePart, timePartFull] = date.split(' ')
-            const timePart = timePartFull ? timePartFull.substring(0, 5) : "00:00" // HH:MM
-
-            console.log(`Checking DB for ${stylist} at ${datePart} ${timePart}`)
-
-            // Check availability (+/- 1 hour logic handled by simplified exact slot check + overlaps)
-            const [h, m] = timePart.split(':').map(Number)
-            const reqStart = h * 60 + m
-            const reqEnd = reqStart + 60
-
-            const dayAppointments = await db.select()
-                .from(appointments)
-                .where(
-                    and(
-                        eq(appointments.date, datePart),
-                        eq(appointments.stylist, stylist as any),
-                        not(eq(appointments.status, 'cancelada'))
+                const dayAppointments = await db.select()
+                    .from(appointments)
+                    .where(
+                        and(
+                            eq(appointments.date, datePart),
+                            eq(appointments.stylist, reqStylist as any),
+                            not(eq(appointments.status, 'cancelada'))
+                        )
                     )
-                )
 
-            let isOccupied = false
-            for (const apt of dayAppointments) {
-                const [ah, am] = apt.time.split(':').map(Number)
-                const aptStart = ah * 60 + am
-                const aptDuration = apt.duration || 60
-                const aptEnd = aptStart + aptDuration
+                let isOccupied = false
+                for (const apt of dayAppointments) {
+                    const [ah, am] = apt.time.split(':').map(Number)
+                    const aptStart = ah * 60 + am
+                    const aptDuration = apt.duration || 60
+                    const aptEnd = aptStart + aptDuration
 
-                if (Math.max(reqStart, aptStart) < Math.min(reqEnd, aptEnd)) {
-                    isOccupied = true
-                    break
-                }
-            }
-
-            if (isOccupied) {
-                // 5A. Occupied -> Ask Gemini for apology
-                try {
-                    const apologyPrompt = `
-                    La fecha solicitada (${date}) para ${stylist} NO está disponible.
-                    Genera un mensaje amable y corto disculpándote y pidiendo que elija otro horario.
-                    `
-                    const apologyResult = await chat.sendMessage(apologyPrompt) // We extend the same chat
-                    finalMessage = apologyResult.response.text()
-                } catch (e) {
-                    finalMessage = `Lo siento, ${stylist} está ocupada en ese horario (${date}). Por favor intenta otro.`
+                    // Overlap check
+                    if (Math.max(reqStart, aptStart) < Math.min(reqEnd, aptEnd)) {
+                        isOccupied = true
+                        break
+                    }
                 }
 
-                // Do NOT save this specific exchange to history? Or yes?
-                // Probably yes to keep context.
-                await saveHistory(phone, "user", text)
-                await saveHistory(phone, "model", finalMessage)
+                if (isOccupied) {
+                    await sendToGateway(phone, `🚫 Lo siento, ${reqStylist} ya está ocupada el ${datePart} a las ${timePart}.\n\nPor favor intenta otro horario (Ej: "Una hora más tarde" o "Mañana a las 9am").`)
+                } else {
+                    // Booking Success
+                    await db.insert(appointments).values({
+                        id: crypto.randomUUID(),
+                        clientName: name || "Cliente",
+                        clientPhone: phone,
+                        date: datePart,
+                        time: timePart,
+                        duration: 60,
+                        stylist: reqStylist,
+                        serviceType: "Uñas",
+                        serviceDetail: reqService,
+                        details: `Agendado por WhatsApp Bot: ${reqService}`,
+                        status: "confirmada"
+                    } as any)
 
-            } else {
-                // 5B. Free -> Insert & Confirm
-                console.log("Slot free. Booking...")
-
-                await db.insert(appointments).values({
-                    id: crypto.randomUUID(),
-                    clientName: name || "Cliente",
-                    clientPhone: phone,
-                    date: datePart,
-                    time: timePart,
-                    duration: 60,
-                    stylist: stylist,
-                    serviceType: "Uñas", // Inferred from context or AI
-                    serviceDetail: service_detail,
-                    details: `Agendado por IA: ${service_detail}`,
-                    status: "confirmada"
-                } as any)
-
-                try {
-                    const confirmPrompt = `
-                    La cita ha sido AGENDADA EXITOSAMENTE en el sistema.
-                    Detalles: ${service_detail} con ${stylist} el ${date}.
-                    Genera un mensaje emocionado confirmando la cita al cliente.
-                    `
-                    const confirmResult = await chat.sendMessage(confirmPrompt)
-                    finalMessage = confirmResult.response.text()
-                } catch (e) {
-                    finalMessage = `✅ ¡Agendado! Tu cita de ${service_detail} con ${stylist} quedó para el ${date}. Te esperamos.`
+                    await sendToGateway(phone, `✅ **¡Cita Confirmada!**\n\n🗓 ${datePart} a las ${timePart}\n💅 Servicio: ${reqService}\n👩‍🦰 Pro: ${reqStylist}\n\n¡Te esperamos en Brahneyker!`)
+                    await clearState(phone) // Reset flow
                 }
 
-                // Clear history after success? Or keep?
-                // Request says "SI ESTÁ LIBRE... envíalo." doesnt explicitly say reset, 
-                // but usually good practice to reset or keep. 
-                // Previous logic reset state. Let's clear history to start fresh next time.
-                await clearHistory(phone)
+                break
 
-                // We send the final message and return EARLY to avoid saving history again below
-                await sendToGateway(phone, finalMessage)
-                return NextResponse.json({ status: "success" })
-            }
-        } else {
-            // Normal conversation turn
-            await saveHistory(phone, "user", text)
-            await saveHistory(phone, "model", finalMessage)
+            default:
+                // Fallback for unknown state, reset to welcome
+                await updateState(phone, 'WELCOME', {})
+                await sendToGateway(phone, "👋 ¡Hola! Bienvenido a Brahneyker 💅.\n\n¿En qué podemos ayudarte hoy?\n\n1️⃣ Agendar Cita de Uñas\n2️⃣ Otro Servicio (Cejas, Pelo, Info)")
+                break
         }
-
-        // Send response
-        await sendToGateway(phone, finalMessage)
 
         return NextResponse.json({ status: "success" })
 
     } catch (error) {
-        console.error("AI Handler Error:", error)
+        console.error("Handler Error:", error)
         return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 })
     }
 }
