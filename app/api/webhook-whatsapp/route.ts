@@ -10,7 +10,8 @@ const GATEWAY_SECRET = "KYT_SECRET_2026"
 
 // Initialize Gemini
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "")
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" })
+const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
+
 
 // --- Helper Functions ---
 
@@ -86,48 +87,62 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "Missing phone or text" }, { status: 400 })
         }
 
+
+
+        // 2. Chat with Gemini
+        // Load history
+        const record = await db.select().from(conversationState).where(eq(conversationState.phone, phone))
+
+        // 0. Check Handoff State
+        if (record.length > 0) {
+            const currentData = JSON.parse(record[0].tempData || "{}")
+            // If already in handoff code 'HUMAN_HANDOFF', do not reply
+            if (record[0].step === 'HUMAN_HANDOFF') {
+                console.log(`[AI Bot] Ignoring ${phone} (Human Handoff Active)`)
+                return NextResponse.json({ status: "ignored", reason: "human_handoff" })
+            }
+        }
+
         console.log(`[AI Bot] From: ${phone}, Msg: "${text}"`)
 
         // 1. Prepare Context
         const now = new Date().toLocaleString("en-US", { timeZone: "America/Bogota" })
 
         const systemPrompt = `
-Eres FabiolaBot, la recepcionista virtual de 'Brahneyker' en Cúcuta, Colombia.
-Habla con acento local suave, amable y usa emojis (💅, ✨).
+Eres Brahneyker, la asistente virtual de 'Brahneyker' en Cúcuta, Colombia.
+Usa un tono MUY FORMAL, profesional y elegante ("Usted").
 
-Tus Servicios: Uñas (Técnicas: Polygel, Semipermanente, Tradicional).
+TU PRIMERA MISIÓN ES FILTRAR:
+1. Al inicio, saluda y pregunta explícitamente si desea "Agendar cita de Uñas" o "Otro servicio".
+2. Si el usuario indica "Uñas" (o manicura, pedicura, etc), procede con el agendamiento normal.
+3. Si el usuario indica "Otro servicio" (cejas, cabello, info general, preguntas complejas), NO respondas más preguntas.
+   Debes responder ÚNICAMENTE este JSON exacto:
+   { "action": "HANDOFF" }
+
+TU SEGUNDA MISIÓN (Solo si es Uñas):
+Obtener:
+1. Servicio/Técnica (Polygel, Semipermanente).
+2. Profesional (Fabiola o Damaris).
+3. Fecha y Hora.
+
+Tus Servicios de Uñas: Técnicas Polygel ($80k), Semipermanente ($40k), Tradicional ($20k).
 Tus Profesionales: Fabiola y Damaris.
 Horario: Lunes a Sábado, 8am a 8pm.
-FECHA_Y_HORA_ACTUAL_COLOMBIA: ${now}
+Fecha Actual: ${now}
 
-TU OBJETIVO:
-Conversar para obtener 3 datos:
-1. Servicio y Técnica (ej: Uñas Polygel).
-2. Profesional (Fabiola o Damaris).
-3. Fecha y Hora exacta (ISO 8601).
-
-REGLAS DE RESPUESTA:
-- Si el usuario solo saluda o pregunta info, responde con texto normal amigable.
-- Si el usuario intenta agendar pero faltan datos, pregúntalos.
-- IMPORTANTE: Si tienes TODOS los datos (Servicio, Pro y Fecha), NO respondas texto. Responde ÚNICAMENTE este JSON:
+REGLAS DE RESPUESTA FINAL (Solo si tienes todos los datos de uñas):
+Responde ÚNICAMENTE este JSON:
 { 
     "action": "CHECK_AVAILABILITY", 
     "stylist": "Fabiola", 
     "date": "2026-02-01 15:00:00", 
     "service_detail": "Polygel" 
 }
-- Nota: Calcula la fecha basándote en que hoy es ${now}.
 `
 
         // 2. Chat with Gemini
-        // Load history
+        // Load history helper
         let history = await getHistory(phone)
-
-        // Start chat session with system instruction? 
-        // Gemini Pro via API usually takes system instruction as part of strict prompt or first message.
-        // For 'gemini-pro' standard, using sendMessage on chatSession is best.
-        // We will prepend system prompt context to the history or strictly manage it.
-        // Actually, easiest way is: 
 
         const chat = model.startChat({
             history: [
@@ -137,14 +152,22 @@ REGLAS DE RESPUESTA:
                 },
                 {
                     role: "model",
-                    parts: [{ text: "Entendido. ¡Hola! Soy FabiolaBot 💅. Estoy lista para atenderte." }]
+                    parts: [{ text: "Comprendido. Saludos cordiales, soy Brahneyker. ¿Desea agendar una cita para el cuidado de sus uñas o requiere algún otro servicio?" }]
                 },
                 ...history
             ]
         })
 
-        const result = await chat.sendMessage(text)
-        const responseText = result.response.text()
+        let responseText = ""
+        try {
+            const result = await chat.sendMessage(text)
+            responseText = result.response.text()
+        } catch (aiError) {
+            console.error("[Gemini API Error]:", aiError)
+            const fallbackMsg = "✨ Hola! Mi cerebro de IA está recibiendo una actualización. 🤖💅\n\nPor favor intenta en unos minutos o contáctanos directamente para agendar."
+            await sendToGateway(phone, fallbackMsg)
+            return NextResponse.json({ status: "success", warning: "AI unavailable" })
+        }
 
         // 3. Process Response
         console.log(`[Gemini Response]: ${responseText}`)
@@ -204,12 +227,16 @@ REGLAS DE RESPUESTA:
 
             if (isOccupied) {
                 // 5A. Occupied -> Ask Gemini for apology
-                const apologyPrompt = `
-                La fecha solicitada (${date}) para ${stylist} NO está disponible.
-                Genera un mensaje amable y corto disculpándote y pidiendo que elija otro horario.
-                `
-                const apologyResult = await chat.sendMessage(apologyPrompt) // We extend the same chat
-                finalMessage = apologyResult.response.text()
+                try {
+                    const apologyPrompt = `
+                    La fecha solicitada (${date}) para ${stylist} NO está disponible.
+                    Genera un mensaje amable y corto disculpándote y pidiendo que elija otro horario.
+                    `
+                    const apologyResult = await chat.sendMessage(apologyPrompt) // We extend the same chat
+                    finalMessage = apologyResult.response.text()
+                } catch (e) {
+                    finalMessage = `Lo siento, ${stylist} está ocupada en ese horario (${date}). Por favor intenta otro.`
+                }
 
                 // Do NOT save this specific exchange to history? Or yes?
                 // Probably yes to keep context.
@@ -234,13 +261,17 @@ REGLAS DE RESPUESTA:
                     status: "confirmada"
                 } as any)
 
-                const confirmPrompt = `
-                La cita ha sido AGENDADA EXITOSAMENTE en el sistema.
-                Detalles: ${service_detail} con ${stylist} el ${date}.
-                Genera un mensaje emocionado confirmando la cita al cliente.
-                `
-                const confirmResult = await chat.sendMessage(confirmPrompt)
-                finalMessage = confirmResult.response.text()
+                try {
+                    const confirmPrompt = `
+                    La cita ha sido AGENDADA EXITOSAMENTE en el sistema.
+                    Detalles: ${service_detail} con ${stylist} el ${date}.
+                    Genera un mensaje emocionado confirmando la cita al cliente.
+                    `
+                    const confirmResult = await chat.sendMessage(confirmPrompt)
+                    finalMessage = confirmResult.response.text()
+                } catch (e) {
+                    finalMessage = `✅ ¡Agendado! Tu cita de ${service_detail} con ${stylist} quedó para el ${date}. Te esperamos.`
+                }
 
                 // Clear history after success? Or keep?
                 // Request says "SI ESTÁ LIBRE... envíalo." doesnt explicitly say reset, 
@@ -265,6 +296,6 @@ REGLAS DE RESPUESTA:
 
     } catch (error) {
         console.error("AI Handler Error:", error)
-        return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
+        return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 })
     }
 }
