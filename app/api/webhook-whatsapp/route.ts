@@ -1,23 +1,26 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { appointments, conversationState } from '@/lib/schema'
-import { eq, and, not } from 'drizzle-orm'
+import { eq, and, not, gte, desc } from 'drizzle-orm'
 import * as chrono from 'chrono-node'
 
 // --- Configuration ---
 const GATEWAY_URL = "http://3.21.167.162:3000/send-message"
 const GATEWAY_SECRET = "KYT_SECRET_2026"
 
-// --- Constants ---
 const STYLISTS = ['Fabiola', 'Damaris']
 const SERVICES = {
+    'acrilico': 'Acrílico',
+    'acrílico': 'Acrílico',
     'polygel': 'Polygel',
     'semi': 'Semipermanente',
     'semipermanente': 'Semipermanente',
     'tradicional': 'Tradicional',
     'tradi': 'Tradicional',
-    'manos': 'Manicura',
-    'pies': 'Pedicura'
+    'manos': 'Uñas (Generico)',
+    'uñas': 'Uñas (Generico)',
+    'pies': 'Pedicura',
+    'pedicura': 'Pedicura'
 }
 
 // --- Helper Functions ---
@@ -38,6 +41,7 @@ async function sendToGateway(phone: string, message: string) {
     } catch (error) {
         console.error("[Gateway] Network error:", error)
     }
+    return message
 }
 
 async function getState(phone: string) {
@@ -53,7 +57,6 @@ async function updateState(phone: string, step: string, data: any = {}) {
     const existing = await getState(phone)
     const newData = { ...(existing?.data || {}), ...data }
 
-    // Check if record exists
     const record = await db.select().from(conversationState).where(eq(conversationState.phone, phone))
     if (record.length > 0) {
         await db.update(conversationState).set({
@@ -75,80 +78,112 @@ async function clearState(phone: string) {
     await db.delete(conversationState).where(eq(conversationState.phone, phone))
 }
 
-// --- Smart Parser ---
+async function hasFutureAppointment(phone: string) {
+    const today = new Date().toISOString().split('T')[0]
+    const active = await db.select().from(appointments).where(
+        and(
+            eq(appointments.clientPhone, phone),
+            gte(appointments.date, today),
+            not(eq(appointments.status, 'cancelada'))
+        )
+    )
+    return active.length > 0
+}
+
+async function getKnownName(phone: string) {
+    const lastAppt = await db.select({ name: appointments.clientName })
+        .from(appointments)
+        .where(eq(appointments.clientPhone, phone))
+        .orderBy(desc(appointments.createdAt))
+        .limit(1)
+
+    return lastAppt.length > 0 ? lastAppt[0].name : null
+}
+
+// --- Logic Helpers ---
 
 function parseRequest(text: string) {
     const normalize = text.toLowerCase()
 
-    // 1. Detect Intent
+    // Intent
     let intent = 'UNKNOWN'
-    if (normalize.includes('uñas') || normalize.includes('cita') || normalize.includes('agendar') || normalize.includes('manicure') || normalize.includes('pedicure') || normalize.includes('mano') || normalize.includes('pies')) {
+    if (normalize.includes('uñas') || normalize.includes('cita') || normalize.includes('agendar') || normalize.includes('manicure') || normalize.includes('acrilico') || normalize.includes('polygel')) {
         intent = 'NAILS'
-    } else if (normalize.includes('cejas') || normalize.includes('pelo') || normalize.includes('cabello') || normalize.includes('otro')) {
+    } else if (normalize.includes('cejas') || normalize.includes('pelo') || normalize.includes('otro')) {
         intent = 'OTHER'
     }
 
-    // 2. Parse Date
+    // Date
     const dateResults = chrono.es.parse(text, new Date(), { forwardDate: true })
-    const date = dateResults.length > 0 ? dateResults[0].start.date() : null
+    let date = null
+    let ambiguousTime = false
 
-    // 3. Detect Stylists & Services (Simple Iteration for One-Shot)
-    // We try to detect distinct requests if "y" is present, or global if not.
-    // E.g. "Fabiola manos y Damaris pies"
+    if (dateResults.length > 0) {
+        date = dateResults[0].start.date()
+        // Full text check for AM/PM logic
+        const fullText = normalize
+        console.log(`[Parser] Full Text: "${fullText}"`)
 
-    const requests: any[] = []
-
-    // Split by "y", ",", "con" to find segments? 
-    // Simple approach: Find all mentions and map.
-    // If 1 stylist + 1 service -> 1 Request.
-    // If 2 stylists + 2 services -> Heuristic matching (Order based?)
-
-    // Let's rely on flexible detection.
-    const detectedStylists: string[] = []
-    STYLISTS.forEach(s => {
-        if (normalize.includes(s.toLowerCase())) detectedStylists.push(s)
-    })
-
-    const detectedServices: string[] = []
-    Object.keys(SERVICES).forEach(k => {
-        if (normalize.includes(k)) {
-            // Avoid duplicates (semi & semipermanente)
-            const val = SERVICES[k as keyof typeof SERVICES]
-            if (!detectedServices.includes(val)) detectedServices.push(val)
+        // Strict check: Must have AM/PM indicator in the sentence
+        if (!fullText.match(/am|pm|a\.m|p\.m|de la mañana|de la tarde|de la noche|mediodia/)) {
+            ambiguousTime = true
+            console.log("[Parser] Ambiguous Time Detected (No markers in full text)")
         }
-    })
 
-    // Pairing Logic
-    if (detectedStylists.length > 0) {
-        if (detectedStylists.length === detectedServices.length) {
-            // Assume strict order: 1st stylist -> 1st service
-            detectedStylists.forEach((stylist, i) => {
-                requests.push({ stylist, service: detectedServices[i] })
-            })
-        } else if (detectedServices.length === 1 && detectedStylists.length >= 1) {
-            // 1 Service for ALL detected stylists? OR 1 Stylist for 1 Service
-            requests.push({ stylist: detectedStylists[0], service: detectedServices[0] })
-            // If extra stylists?
-            if (detectedStylists.length > 1) {
-                // Maybe they want the same service for both?
-                for (let i = 1; i < detectedStylists.length; i++) {
-                    requests.push({ stylist: detectedStylists[i], service: detectedServices[0] })
-                }
+        // Fix Chrono Logic: If text says "de la noche/tarde" and hour < 12, force PM
+        if (date && (fullText.includes("de la tarde") || fullText.includes("de la noche") || fullText.includes("pm"))) {
+            const h = date.getHours()
+            if (h < 12) {
+                date.setHours(h + 12)
+                console.log(`[Parser] Fixed PM: ${h} -> ${h + 12}`)
             }
-        } else if (detectedStylists.length === 1 && detectedServices.length > 1) {
-            // 1 Stylist performing Multiple Services?
-            // Merge services into string?
-            requests.push({ stylist: detectedStylists[0], service: detectedServices.join(" + ") })
-        } else {
-            // Fallback: Just take what we have
-            if (detectedStylists[0]) requests.push({ stylist: detectedStylists[0] })
         }
-    } else {
-        // No stylist?
-        if (detectedServices.length > 0) requests.push({ service: detectedServices.join(" + ") })
     }
 
-    return { intent, date, requests, detectedStylists, detectedServices }
+    // Stylists & Services
+    const requests: any[] = []
+
+    // Segmentation logic ("y")
+    const foundStylistsGlobal: string[] = []
+    STYLISTS.forEach(s => { if (normalize.includes(s.toLowerCase())) foundStylistsGlobal.push(s) })
+
+    if (normalize.includes(" y ") && foundStylistsGlobal.length > 1) {
+        const parts = normalize.split(" y ")
+        parts.forEach(part => {
+            let partStylist = null
+            STYLISTS.forEach(s => { if (part.includes(s.toLowerCase())) partStylist = s })
+            let partService = null
+            Object.keys(SERVICES).forEach(k => {
+                if (part.includes(k)) {
+                    const val = SERVICES[k as keyof typeof SERVICES]
+                    if (!partService || val !== 'Uñas (Generico)') partService = val
+                }
+            })
+            if (partStylist) requests.push({ stylist: partStylist, service: partService })
+        })
+    }
+
+    if (requests.length === 0) {
+        const detectedServices: string[] = []
+        Object.keys(SERVICES).forEach(k => {
+            if (normalize.includes(k)) {
+                const val = SERVICES[k as keyof typeof SERVICES]
+                if (!detectedServices.includes(val)) detectedServices.push(val)
+            }
+        })
+        const specificServices = detectedServices.filter(s => s !== 'Uñas (Generico)')
+        const finalServices = specificServices.length > 0 ? specificServices : detectedServices
+
+        if (foundStylistsGlobal.length > 0) {
+            foundStylistsGlobal.forEach((sty, i) => {
+                requests.push({ stylist: sty, service: finalServices[i] || finalServices[0] })
+            })
+        } else if (finalServices.length > 0) {
+            requests.push({ service: finalServices[0] })
+        }
+    }
+
+    return { intent, date, ambiguousTime, requests }
 }
 
 async function checkAvailability(date: Date, stylist: string) {
@@ -159,7 +194,7 @@ async function checkAvailability(date: Date, stylist: string) {
 
     console.log(`Checking Availability: ${stylist} on ${datePart} ${timePart}`)
 
-    if (h < 8 || h >= 20) return { available: false, reason: "closed" }
+    if (h < 8 || h > 19) return { available: false, reason: "closed", timePart }
 
     const reqStart = h * 60 + m
     const reqEnd = reqStart + 60
@@ -201,175 +236,261 @@ export async function POST(req: Request) {
         if (isGroup) return NextResponse.json({ status: "ignored_group" })
         if (!phone || !text) return NextResponse.json({ error: "Missing data" }, { status: 400 })
 
-        console.log(`[Bot] From: ${phone}, Msg: "${text}"`)
-
-        // 1. Get State
+        // 0. Check Future Appointments
+        const hasActive = await hasFutureAppointment(phone)
         const state = await getState(phone)
         const currentStep = state?.step || 'WELCOME'
         const cleanText = text.trim().toLowerCase()
 
-        // 2. Global Handoff Check
+        if (hasActive && (!state || state.step === 'WELCOME')) {
+            console.log(`[Bot] Ignoring ${phone} (Has Active Appointment)`)
+            return NextResponse.json({ status: "ignored", reason: "already_booked" })
+        }
+
+        // 1. Global Handoff Check
         if (currentStep === 'HUMAN_HANDOFF') {
             return NextResponse.json({ status: "ignored", reason: "handoff" })
         }
 
-        // 3. Reset/Greeting
-        if (['hola', 'inicio', 'buenos dias', 'buenas tardes'].includes(cleanText)) {
+        // 2. Reset/Greeting
+        if (['hola', 'inicio', 'buenos dias'].includes(cleanText) && !hasActive) {
             await updateState(phone, 'WELCOME', {})
             await sendToGateway(phone, "👋 ¡Hola! Bienvenido a Brahneyker 💅.\n\n¿En qué podemos ayudarte hoy?\n\n1️⃣ Agendar Cita de Uñas\n2️⃣ Otro Servicio (Cejas, Pelo, Info)")
             return NextResponse.json({ status: "success" })
         }
 
-        // 4. Parser Run
+        // 3. ASK_NAME Response
+        if (currentStep === 'ASK_NAME') {
+            const providedName = text.trim()
+            // Store Name
+            await updateState(phone, 'CONFIRM_BOOKING', { clientName: providedName })
+
+            // Re-display confirmation
+            const data = state?.data!
+            const dateObj = new Date(data.finalDate)
+            await sendToGateway(phone, `👋 Un gusto, ${providedName}.\n\n✅ Confirmando: ${data.finalDate} a las ${data.finalTime}.\n\n¿Agendamos? (Responde **Ok**).`)
+            return NextResponse.json({ status: "name_received" })
+        }
+
+        // 4. Confirm Booking Step
+        if (currentStep === 'CONFIRM_BOOKING') {
+            if (['ok', 'okey', 'si', 'dale', 'confirmar', 'listo'].includes(cleanText)) {
+                const data = state?.data!
+                // Name priority: 1. Stored in State (from ASK_NAME), 2. From DB (getKnownName logic check below), 3. Profile
+                // Actually logic is: we moved to here because we HAVE a name in state OR we used DB name.
+                const clientName = data.clientName || name || "Cliente"
+
+                const successParams = []
+                for (const req of data.pendingRequests) {
+                    await db.insert(appointments).values({
+                        id: crypto.randomUUID(),
+                        clientName: clientName,
+                        clientPhone: phone,
+                        date: data.finalDate,
+                        time: data.finalTime,
+                        duration: 60,
+                        stylist: req.stylist,
+                        serviceType: "Uñas",
+                        serviceDetail: req.service,
+                        details: `Agendado por WhatsApp Bot: ${req.service}`,
+                        status: "confirmada"
+                    } as any)
+                    successParams.push(`• ${req.service} con ${req.stylist}`)
+                }
+
+                await sendToGateway(phone, `✅ **¡Cita Confirmada!**\n\n🗓 ${data.finalDate} a las ${data.finalTime}\n${successParams.join("\n")}\n👤 ${clientName}\n\n¡Gracias por elegirnos!`)
+                await clearState(phone)
+                return NextResponse.json({ status: "booked" })
+
+            } else {
+                await sendToGateway(phone, "Entendido. No hemos agendado nada. ¿Deseas cambiar el horario? Escribe una nueva fecha (Ej: 'Mañana 4pm').")
+                await updateState(phone, 'SELECT_DATE', { requests: state?.data.pendingRequests })
+                return NextResponse.json({ status: "cancelled_confirmation" })
+            }
+        }
+
+        // 5. AM/PM Selection Step
+        if (currentStep === 'SELECT_AM_PM') {
+            const prevData = state?.data!
+            const baseDate = new Date(prevData.targetDateRaw)
+
+            if (cleanText.includes('mañana') || cleanText.includes('am')) {
+                let h = baseDate.getHours()
+                if (h >= 12) baseDate.setHours(h - 12)
+            } else if (cleanText.includes('tarde') || cleanText.includes('noche') || cleanText.includes('pm')) {
+                let h = baseDate.getHours()
+                if (h < 12) baseDate.setHours(h + 12)
+            } else {
+                await sendToGateway(phone, "Por favor responde: 'Mañana' o 'Tarde'.")
+                return NextResponse.json({ status: "ask_am_pm_retry" })
+            }
+
+            // --- Availability Logic (Duplicated) ---
+            const candidateRequests = prevData.requests
+            const resolvedDate = baseDate
+
+            let successParams = []
+            let failParams = []
+            let finalTimeParam = ""
+
+            for (const req of candidateRequests) {
+                const check = await checkAvailability(resolvedDate, req.stylist)
+                if (check.available) {
+                    successParams.push(req)
+                    finalTimeParam = check.timePart
+                } else {
+                    if (check.reason === 'closed') failParams.push(`Lo siento, esa hora no está disponible (Horario: 8am - 7pm).`)
+                    else failParams.push(`Esa hora ya está ocupada.`)
+                }
+            }
+
+            const dateStr = resolvedDate.toISOString().split('T')[0]
+
+            if (failParams.length > 0) {
+                await sendToGateway(phone, `🚫 ${failParams.join(" ")} Intenta otro horario.`)
+                await updateState(phone, 'SELECT_DATE', { requests: candidateRequests, targetDate: null })
+                return NextResponse.json({ status: "unavailable", details: failParams })
+            } else {
+                // Check Name HERE too (Logic A)
+                let clientName = await getKnownName(phone)
+
+                if (!clientName) {
+                    await sendToGateway(phone, `✅ Hay disponibilidad: ${dateStr} a las ${finalTimeParam}.\n\nAntes de finalizar, **¿cuál es tu nombre?**`)
+                    await updateState(phone, 'ASK_NAME', {
+                        pendingRequests: candidateRequests,
+                        finalDate: dateStr,
+                        finalTime: finalTimeParam
+                    })
+                    return NextResponse.json({ status: "ask_name" })
+                } else {
+                    await sendToGateway(phone, `✅ Hay disponibilidad: ${dateStr} a las ${finalTimeParam}.\n\n¿Te lo agendo, ${clientName}? (Escribe **Ok**).`)
+                    await updateState(phone, 'CONFIRM_BOOKING', {
+                        pendingRequests: candidateRequests,
+                        finalDate: dateStr,
+                        finalTime: finalTimeParam,
+                        clientName
+                    })
+                    return NextResponse.json({ status: "confirm_booking" })
+                }
+            }
+        }
+
+        // 6. Normal Flow (Parser)
         const parsed = parseRequest(text)
 
-        // --- Special Handling: Explicit "Other" ---
         if (parsed.intent === 'OTHER' || cleanText.includes('otro servicio') || cleanText === '2') {
             await updateState(phone, 'HUMAN_HANDOFF')
-            await sendToGateway(phone, "Entendido. Un asesor humano 👩‍💻 te escribirá pronto.\n\n(Este chat quedará en espera).")
+            await sendToGateway(phone, "Entendido. Un asesor humano 👩‍💻 te escribirá pronto.")
             return NextResponse.json({ status: "handoff" })
         }
 
-        // --- Logic Controller ---
-
-        // A. If we are in WELCOME and user says "1" or "Uñas"
         if (currentStep === 'WELCOME' && (cleanText === '1' || parsed.intent === 'NAILS')) {
-            // Check if we already have robust info from the first message
-            // e.g. "Hola quiero uñas mañana 3pm con Fabiola"
-            if (parsed.date && parsed.detectedStylists.length > 0) {
-                // Fast-track: Fallthrough to confirmation logic below
-            } else {
-                // Step-by-step
-                await updateState(phone, 'SELECT_SERVICE')
-                await sendToGateway(phone, "💅 ¡Excelente! ¿Qué tipo de servicio?\n\nA. Polygel\nB. Semipermanente\nC. Tradicional")
-                return NextResponse.json({ status: "success" })
-            }
+            await updateState(phone, 'SELECT_SERVICE')
         }
 
-        // B. Merging Data
-        // We accumulate data from previous state + new message
         const prevData = state?.data || {}
         let candidateRequests = [...(prevData.requests || [])]
 
-        // If parser found new structured requests, override or add?
-        // If we are in SELECT_SERVICE, we expect service info.
-        if (currentStep === 'SELECT_SERVICE') {
-            if (parsed.detectedServices.length > 0) {
-                // Found explicit service name
-                // Update logical request
-                if (candidateRequests.length === 0) candidateRequests.push({})
-                candidateRequests[0].service = parsed.detectedServices[0]
-            } else if (cleanText.includes('a') || cleanText.includes('poly')) {
-                if (candidateRequests.length === 0) candidateRequests.push({})
-                candidateRequests[0].service = 'Polygel'
-            } else if (cleanText.includes('b') || cleanText.includes('semi')) {
-                if (candidateRequests.length === 0) candidateRequests.push({})
-                candidateRequests[0].service = 'Semipermanente'
-            } else if (cleanText.includes('c') || cleanText.includes('tradi')) {
-                if (candidateRequests.length === 0) candidateRequests.push({})
-                candidateRequests[0].service = 'Tradicional'
+        if (parsed.requests.length > 0) {
+            if (currentStep === 'SELECT_SERVICE_SPECIFIC' && prevData.targetStylist) {
+                const targetReq = candidateRequests.find((r: any) => r.stylist === prevData.targetStylist)
+                if (targetReq && parsed.requests[0].service) targetReq.service = parsed.requests[0].service
+                else {
+                    if (cleanText.includes('acrilico')) targetReq.service = 'Acrílico'
+                    else if (cleanText.includes('poly')) targetReq.service = 'Polygel'
+                    else if (cleanText.includes('semi')) targetReq.service = 'Semipermanente'
+                    else if (cleanText.includes('tradi')) targetReq.service = 'Tradicional'
+                }
+            } else {
+                candidateRequests = parsed.requests
             }
         }
 
-        if (currentStep === 'SELECT_STYLIST') {
-            if (parsed.detectedStylists.length > 0) {
-                if (candidateRequests.length === 0) candidateRequests.push({})
-                candidateRequests[0].stylist = parsed.detectedStylists[0]
-            } else if (cleanText.includes('1') || cleanText.includes('fabiola')) {
-                if (candidateRequests.length === 0) candidateRequests.push({})
-                candidateRequests[0].stylist = 'Fabiola'
-            } else if (cleanText.includes('2') || cleanText.includes('damaris')) {
-                if (candidateRequests.length === 0) candidateRequests.push({})
-                candidateRequests[0].stylist = 'Damaris'
-            }
-        }
+        if (candidateRequests.length === 0) candidateRequests.push({})
+        const firstReq = candidateRequests[0]
+        if (cleanText === '1' || cleanText.includes('fabiola')) firstReq.stylist = 'Fabiola'
+        if (cleanText === '2' || cleanText.includes('damaris')) firstReq.stylist = 'Damaris'
+        if (cleanText === 'a') firstReq.service = 'Polygel'
+        if (cleanText === 'b') firstReq.service = 'Semipermanente'
+        if (cleanText === 'c') firstReq.service = 'Tradicional'
 
-        // Always try to grab date if present
         let targetDate = parsed.date ? parsed.date : (prevData.targetDate ? new Date(prevData.targetDate) : null)
 
-        // Also grab one-shot requests if valid
-        if (parsed.requests.length > 0) {
-            candidateRequests = parsed.requests
+        // Validation - Service
+        let incompleteReq = null
+        for (const req of candidateRequests) {
+            if (!req.service || req.service === 'Uñas (Generico)') { incompleteReq = req; break; }
+        }
+        if (incompleteReq) {
+            const stylistMsg = incompleteReq.stylist ? ` con ${incompleteReq.stylist}` : ""
+            await updateState(phone, 'SELECT_SERVICE_SPECIFIC', { requests: candidateRequests, targetStylist: incompleteReq.stylist, targetDate })
+            await sendToGateway(phone, `💅 ¿Qué técnica de uñas deseas${stylistMsg}?\n\n• Acrílico\n• Polygel\n• Semipermanente\n• Tradicional`)
+            return NextResponse.json({ status: "ask_service_specific" })
         }
 
-        // C. Validation & Next Step
-        // We need: Service, Stylist, Date.
-        const firstReq = candidateRequests[0] || {}
-
-        if (!firstReq.service) {
-            await updateState(phone, 'SELECT_SERVICE', { requests: candidateRequests })
-            // If we didn't just ask this...
-            if (currentStep !== 'SELECT_SERVICE') {
-                await sendToGateway(phone, "💅 ¿Qué tipo de servicio deseas?\n\nA. Polygel\nB. Semipermanente\nC. Tradicional")
-            } else {
-                await sendToGateway(phone, "Por favor elige una opción válida (A, B, C).")
-            }
-            return NextResponse.json({ status: "ask_service" })
-        }
-
-        if (!firstReq.stylist) {
-            await updateState(phone, 'SELECT_STYLIST', { requests: candidateRequests })
-            if (currentStep !== 'SELECT_STYLIST') {
-                await sendToGateway(phone, `✅ Elegido: ${firstReq.service}.\n¿Con quién te gustaría agendar?\n\n1. Fabiola\n2. Damaris`)
-            } else {
-                await sendToGateway(phone, "Por favor elige: 1. Fabiola o 2. Damaris.")
-            }
+        // Validation - Stylist
+        if (!candidateRequests.every((r: any) => r.stylist)) {
+            await updateState(phone, 'SELECT_STYLIST', { requests: candidateRequests, targetDate })
+            await sendToGateway(phone, `👩‍🦰 ¿Con quién te gustaría agendar?\n\n1. Fabiola\n2. Damaris`)
             return NextResponse.json({ status: "ask_stylist" })
         }
 
+        // Validation - Date
         if (!targetDate) {
             await updateState(phone, 'SELECT_DATE', { requests: candidateRequests })
-            if (parsed.date === null && currentStep === 'SELECT_DATE') {
-                await sendToGateway(phone, "⚠️ No reconocí la fecha. Intenta formato: 'Mañana 3pm' o 'Viernes 10:00'.")
-            } else {
-                await sendToGateway(phone, `✨ ${firstReq.stylist} te atenderá.\n\nPor favor escribe la **Fecha y Hora** (Ej: "Mañana 3pm").`)
-            }
+            await sendToGateway(phone, `🗓 ¿Para qué **Fecha y Hora** deseas la cita?\n\n(Ej: "Mañana 3pm" o "Viernes 10am")`)
             return NextResponse.json({ status: "ask_date" })
         }
 
-        // D. Availability Check & Booking
-        // Iterate all requests (usually 1, but maybe 2)
+        // --- AM/PM Ambiguity Check ---
+        if (parsed.ambiguousTime) {
+            await updateState(phone, 'SELECT_AM_PM', { requests: candidateRequests, targetDateRaw: targetDate.toISOString() })
+            await sendToGateway(phone, "🤔 ¿Te refieres a la **Mañana** o a la **Tarde**?")
+            return NextResponse.json({ status: "ask_am_pm" })
+        }
+
+        // Availability (Pre-Confirm)
         let successParams = []
         let failParams = []
+        let finalTimeParam = ""
 
         for (const req of candidateRequests) {
-            // Default if missing in multi-req?
-            const srv = req.service || firstReq.service
-            const sty = req.stylist || firstReq.stylist
-            // Use global date
-            const check = await checkAvailability(targetDate, sty)
-
+            const check = await checkAvailability(targetDate, req.stylist)
             if (check.available) {
-                // BOOK
-                await db.insert(appointments).values({
-                    id: crypto.randomUUID(),
-                    clientName: name || "Cliente",
-                    clientPhone: phone,
-                    date: check.datePart,
-                    time: check.timePart,
-                    duration: 60,
-                    stylist: sty,
-                    serviceType: "Uñas",
-                    serviceDetail: srv,
-                    details: `Agendado por WhatsApp Bot: ${srv}`,
-                    status: "confirmada"
-                } as any)
-                successParams.push(`${srv} con ${sty} (${check.timePart})`)
+                successParams.push(req)
+                finalTimeParam = check.timePart
             } else {
-                failParams.push(`${sty} está ocupada a las ${check.timePart}`)
+                if (check.reason === 'closed') failParams.push(`Lo siento, esa hora no está disponible (Horario: 8am - 7pm).`)
+                else failParams.push(`Esa hora ya está ocupada.`)
             }
         }
 
         if (failParams.length > 0) {
-            // Report Issues
-            await sendToGateway(phone, `🚫 Disponibilidad:\n\n${failParams.join("\n")}\n\nPor favor intenta otro horario.`)
-            // Keep state to retry date
+            await sendToGateway(phone, `🚫 ${failParams.join(" ")} Intenta otro horario.`)
             await updateState(phone, 'SELECT_DATE', { requests: candidateRequests, targetDate: null })
+            return NextResponse.json({ status: "unavailable", details: failParams })
         } else {
-            // Success
-            const dateStr = targetDate.toLocaleDateString('es-CO')
-            await sendToGateway(phone, `✅ **¡Cita Agendada!**\n\n🗓 ${dateStr}\n${successParams.join("\n")}\n\n¡Te esperamos!`)
-            await clearState(phone)
+            // Check Name Logic (Logic B - Main Flow)
+            let clientName = await getKnownName(phone)
+
+            if (!clientName) {
+                await sendToGateway(phone, `✅ Hay disponibilidad: ${targetDate.toISOString().split('T')[0]} a las ${finalTimeParam}.\n\nAntes de finalizar, **¿cuál es tu nombre?**`)
+                await updateState(phone, 'ASK_NAME', {
+                    pendingRequests: candidateRequests,
+                    finalDate: targetDate.toISOString().split('T')[0],
+                    finalTime: finalTimeParam
+                })
+                return NextResponse.json({ status: "ask_name" })
+            } else {
+                await sendToGateway(phone, `✅ Hay disponibilidad: ${targetDate.toISOString().split('T')[0]} a las ${finalTimeParam}.\n\n¿Te lo agendo, ${clientName}? (Escribe **Ok**).`)
+                await updateState(phone, 'CONFIRM_BOOKING', {
+                    pendingRequests: candidateRequests,
+                    finalDate: targetDate.toISOString().split('T')[0],
+                    finalTime: finalTimeParam,
+                    clientName
+                })
+                return NextResponse.json({ status: "confirm_booking" })
+            }
         }
 
         return NextResponse.json({ status: "success" })

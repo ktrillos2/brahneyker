@@ -1,6 +1,6 @@
 const PORT = 3001;
 const BASE_URL = `http://localhost:${PORT}/api/webhook-whatsapp`;
-const PHONE_NUMBER = "573005554444"; // Nuevo número
+const PHONE_NUMBER = "573009990001"; // New number
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -13,7 +13,7 @@ async function sendMessage(text) {
             body: JSON.stringify({
                 phone: PHONE_NUMBER,
                 text: text,
-                name: "Tester Confirm 2"
+                name: "Tester Time 2"
             })
         });
 
@@ -26,26 +26,20 @@ async function sendMessage(text) {
 }
 
 async function runTest() {
-    console.log("🚀 Iniciando Simulación (AM/PM + Confirmación)...");
+    console.log("🚀 Simulación: Tiempos Naturales (Specific)");
 
-    // 1. Reset
+    // Case 1: "9 de la noche" -> Closed
     await sendMessage("Hola");
-    await sleep(1000);
-
-    // 2. Specific Request with Ambiguous Time ("5")
-    await sendMessage("Quiero uñas polygel con Fabiola mañana a las 5");
+    await sleep(500);
+    // Use specific service to bypass validation
+    await sendMessage("Quiero uñas polygel con Fabiola mañana a las 9 de la noche");
     await sleep(2000);
 
-    // 3. Resolve Ambiguity
-    await sendMessage("Tarde");
-    await sleep(2000);
+    await sendMessage("reiniciar");
+    await sleep(500);
 
-    // 4. Confirmation
-    await sendMessage("Ok");
-    await sleep(2000);
-
-    // 5. Block Check
-    await sendMessage("Hola");
+    // Case 2: "9 y media" -> Ambiguous
+    await sendMessage("Quiero uñas polygel con Fabiola mañana a las 9 y media");
 }
 
 runTest();
