@@ -30,7 +30,7 @@ export const appointments = sqliteTable("appointments", {
     time: text("time").notNull(), // HH:MM
     duration: integer("duration").default(60), // in minutes
     details: text("details").notNull(),
-    stylist: text("stylist").notNull(), // "Damaris" | "Fabiola"
+    stylist: text("stylist").notNull(), // "Damaris" | "Fabiola" | "Carolina" | "Lizday"
     status: text("status").notNull().default("pendiente"), // "pendiente" | "confirmada" | "completada" | "cancelada"
     clientName: text("client_name"),
     clientPhone: text("client_phone"),
