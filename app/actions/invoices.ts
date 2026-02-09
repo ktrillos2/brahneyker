@@ -35,6 +35,8 @@ export async function getInvoices(page = 1, pageSize = 20) {
 
         return {
             ...inv,
+            type: inv.type, // Ensure type is passed
+            tax: 0, // Default tax as it's not in DB yet
             items: items.map(item => ({
                 productId: item.productId,
                 name: item.productName,
@@ -68,6 +70,7 @@ export async function createInvoice(data: any) {
                 customerPhone: data.customerPhone,
                 subtotal: data.subtotal,
                 total: data.total,
+                type: data.type || "general",
             })
 
             // Create Invoice Items
@@ -82,27 +85,13 @@ export async function createInvoice(data: any) {
                 })
 
                 // Decrease stock
-                // Note: The frontend was already doing this via updateProduct, 
-                // but it's safer to do it here or ensure we don't double count if we keep frontend logic.
-                // The prompt asked to "replace localStorage", so we should ideally move business logic here.
-                // However, to keep it simple and compatible with existing frontend logic which calculates totals,
-                // we will stick to just saving the invoice here.
-                // BUT, the plan said "stock restoration logic to backend", so let's handle stock here too?
-                // Actually, the current frontend logic subtracts stock *before* generating invoice. 
-                // Let's assume the frontend sends us the items AND we should ensure stock is decremented? 
-                // OR better, let's let the frontend handle the decrement for now to minimize refactor risk, 
-                // and we just handle the persistence of the invoice.
-
-                // WAIT! The frontend does `updatedProducts` locally and `setProducts`. 
-                // It does NOT call an API to update stock in DB in `handleGenerateInvoice`!
-                // It ONLY updates local state. 
-                // So we MUST update DB stock here!
-
-                const product = await tx.select().from(products).where(eq(products.id, item.productId)).get()
-                if (product) {
-                    await tx.update(products)
-                        .set({ quantity: product.quantity - item.quantity })
-                        .where(eq(products.id, item.productId))
+                if (item.productId) {
+                    const product = await tx.select().from(products).where(eq(products.id, item.productId)).get()
+                    if (product) {
+                        await tx.update(products)
+                            .set({ quantity: product.quantity - item.quantity })
+                            .where(eq(products.id, item.productId))
+                    }
                 }
             }
         })
@@ -124,6 +113,8 @@ export async function deleteInvoice(id: string) {
             const items = await tx.select().from(invoiceItems).where(eq(invoiceItems.invoiceId, id))
 
             for (const item of items) {
+                if (!item.productId) continue
+
                 const product = await tx.select().from(products).where(eq(products.id, item.productId)).get()
                 if (product) {
                     await tx.update(products)

@@ -420,7 +420,7 @@ export default function CitasPage() {
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               {/* Stylist */}
               <div>
-                <label className="text-sm font-medium text-foreground mb-2 block">Estilista *</label>
+                <label className="text-sm font-medium text-foreground mb-2 block">Usuario *</label>
                 <div className="flex gap-2">
                   {stylists.map(s => (
                     <button

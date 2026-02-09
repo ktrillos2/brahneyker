@@ -18,6 +18,13 @@ import {
   ChevronUp,
   ScanLine,
 } from "lucide-react"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 interface Product {
   id: string
@@ -35,6 +42,7 @@ interface InvoiceItem {
   barcode: string
 }
 
+// ... (Update Interface)
 interface Invoice {
   id: string
   items: InvoiceItem[]
@@ -44,7 +52,11 @@ interface Invoice {
   date: string
   customerName: string
   customerPhone: string
+  type: string // Add type
 }
+
+// ... (In History List)
+
 
 function FacturasContent() {
   const [products, setProducts] = useState<Product[]>([])
@@ -54,6 +66,7 @@ function FacturasContent() {
   const [customerName, setCustomerName] = useState("")
   const [customerPhone, setCustomerPhone] = useState("")
   const [showHistory, setShowHistory] = useState(false)
+  const [filterType, setFilterType] = useState<string>("all")
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null)
   const [expandedInvoice, setExpandedInvoice] = useState<string | null>(null)
   const [notification, setNotification] = useState<{ message: string; type: "success" | "error" } | null>(null)
@@ -123,6 +136,12 @@ function FacturasContent() {
       return scoreB - scoreA
     }).slice(0, 10)
   }, [products, barcodeInput, currentItems])
+
+  const filteredInvoices = useMemo(() => {
+    if (filterType === "all") return invoices
+    return invoices.filter((invoice) => invoice.type === filterType)
+  }, [invoices, filterType])
+
   useEffect(() => {
     // Fetch products from DB
     const fetchProducts = async () => {
@@ -328,7 +347,8 @@ function FacturasContent() {
         total,
         date: invoicePayload.date,
         customerName: invoicePayload.customerName,
-        customerPhone: invoicePayload.customerPhone
+        customerPhone: invoicePayload.customerPhone,
+        type: "general"
       }
 
       // Refresh products to reflect stock changes from backend
@@ -771,14 +791,29 @@ function FacturasContent() {
       ) : (
         /* Invoice History */
         <div className="space-y-4">
-          {invoices.length === 0 ? (
+          <div className="flex justify-between items-center bg-card border border-border p-4 rounded-xl">
+            <h3 className="font-semibold text-foreground">Filtrar por:</h3>
+            <Select value={filterType} onValueChange={setFilterType}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Tipo de factura" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas</SelectItem>
+                <SelectItem value="diaria-servicios">Servicios</SelectItem>
+                <SelectItem value="diaria-productos">Productos</SelectItem>
+                <SelectItem value="general">General</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {filteredInvoices.length === 0 ? (
             <div className="bg-card border border-border rounded-xl p-12 text-center">
               <FileText className="w-16 h-16 text-muted-foreground/50 mx-auto mb-4" />
               <h3 className="text-xl font-semibold text-foreground mb-2">No hay facturas</h3>
               <p className="text-muted-foreground">Las facturas generadas aparecerán aquí.</p>
             </div>
           ) : (
-            invoices.map((invoice) => (
+            filteredInvoices.map((invoice) => (
               <div key={invoice.id} className="bg-card border border-border rounded-xl overflow-hidden">
                 <button
                   onClick={() => setExpandedInvoice(expandedInvoice === invoice.id ? null : invoice.id)}
@@ -789,7 +824,24 @@ function FacturasContent() {
                       <FileText className="w-5 h-5 text-primary" />
                     </div>
                     <div className="text-left">
-                      <p className="font-semibold text-foreground">{invoice.id}</p>
+                      <div className="flex flex-col gap-0.5">
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold text-foreground text-lg">
+                            {invoice.customerName && invoice.customerName !== "Cliente General" ? invoice.customerName :
+                              invoice.type === 'diaria-servicios' ? 'Venta de Servicios' :
+                                invoice.type === 'diaria-productos' ? 'Venta de Productos' :
+                                  'Venta General'}
+                          </p>
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full border ${invoice.type === 'diaria-servicios' ? 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-800' :
+                            invoice.type === 'diaria-productos' ? 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800' :
+                              'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700'
+                            }`}>
+                            {invoice.type === 'diaria-servicios' ? 'Servicios' :
+                              invoice.type === 'diaria-productos' ? 'Productos' : 'General'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground font-mono">ID: {invoice.id.slice(0, 8)}...</p>
+                      </div>
                       <p className="text-sm text-muted-foreground">
                         {new Date(invoice.date).toLocaleDateString("es-CO", {
                           year: "numeric",

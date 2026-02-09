@@ -4,11 +4,12 @@ import { useState } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import Link from "next/link"
 import { Logo } from "@/components/logo"
-import { Package, FileText, Calendar, LayoutDashboard, LogOut, Menu } from "lucide-react"
+import { Package, FileText, Calendar, LayoutDashboard, LogOut, Menu, Receipt } from "lucide-react"
 import { logoutAction } from "../../app/actions/auth"
 
 const navItems = [
     { href: "/admin/dashboard", label: "Panel Principal", icon: LayoutDashboard },
+    { href: "/admin/dashboard/daily-invoices", label: "Facturación Diaria", icon: Receipt },
     { href: "/admin/dashboard/inventario", label: "Inventario", icon: Package },
     { href: "/admin/dashboard/facturas", label: "Facturas", icon: FileText },
     { href: "/admin/dashboard/citas", label: "Agenda de Citas", icon: Calendar },

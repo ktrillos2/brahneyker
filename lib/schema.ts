@@ -55,6 +55,7 @@ export const invoices = sqliteTable("invoices", {
     customerPhone: text("customer_phone"),
     subtotal: real("subtotal").notNull(),
     total: real("total").notNull(),
+    type: text("type").notNull().default("general"), // "general" | "diaria-servicios" | "diaria-productos"
     createdAt: text("created_at").default(sql`(CURRENT_TIMESTAMP)`),
 })
 
@@ -62,9 +63,32 @@ export const invoices = sqliteTable("invoices", {
 export const invoiceItems = sqliteTable("invoice_items", {
     id: text("id").primaryKey(),
     invoiceId: text("invoice_id").notNull().references(() => invoices.id, { onDelete: 'cascade' }),
-    productId: text("product_id").notNull().references(() => products.id),
+    productId: text("product_id").references(() => products.id),
     productName: text("product_name").notNull(),
     quantity: integer("quantity").notNull(),
     price: real("price").notNull(),
+})
+
+// Daily Operations Table (Services by Staff)
+export const dailyOperations = sqliteTable("daily_operations", {
+    id: text("id").primaryKey(),
+    date: text("date").notNull(), // YYYY-MM-DD
+    stylist: text("stylist").notNull(), // "Damaris" | "Fabiola" | "Lizday" | "Stella" | "Karolina"
+    description: text("description").notNull(),
+    amount: real("amount").notNull(),
+    status: text("status").notNull().default("pendiente"), // "pendiente" | "facturada"
+    invoiceId: text("invoice_id").references(() => invoices.id),
+    createdAt: text("created_at").default(sql`(CURRENT_TIMESTAMP)`),
+})
+
+// Daily Product Sales Table
+export const dailyProductSales = sqliteTable("daily_product_sales", {
+    id: text("id").primaryKey(),
+    date: text("date").notNull(), // YYYY-MM-DD
+    productId: text("product_id").notNull().references(() => products.id),
+    quantity: integer("quantity").notNull(),
+    status: text("status").notNull().default("pendiente"), // "pendiente" | "facturada"
+    invoiceId: text("invoice_id").references(() => invoices.id),
+    createdAt: text("created_at").default(sql`(CURRENT_TIMESTAMP)`),
 })
 
