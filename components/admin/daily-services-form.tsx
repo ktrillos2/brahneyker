@@ -11,7 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
-const STYLISTS = ["Damaris", "Fabiola", "Lizday", "Stella", "Karolina"]
+const STYLISTS = ["Damaris", "Fabiola", "Lizday", "Stella", "Karolina", "Keyner"]
 
 interface DailyOperation {
     id: string

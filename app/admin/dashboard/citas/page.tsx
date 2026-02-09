@@ -25,7 +25,7 @@ interface Appointment {
   time: string
   duration: number
   details: string
-  stylist: "Damaris" | "Fabiola" | "Carolina" | "Lizday"
+  stylist: "Damaris" | "Fabiola" | "Karolina" | "Lizday" | "Stella"
   status: "pendiente" | "confirmada" | "completada" | "cancelada"
 }
 
@@ -50,7 +50,7 @@ const generateTimeSlots = (startHour: number, endHour: number, intervalMinutes: 
 
 const modalTimeSlots = generateTimeSlots(8, 19, 15)
 
-const stylists = ["Damaris", "Fabiola", "Carolina", "Lizday"] as const
+const stylists = ["Damaris", "Fabiola", "Karolina", "Lizday", "Stella"] as const
 
 const statusColors = {
   pendiente: "bg-yellow-500/10 text-yellow-500 border-l-2 border-yellow-500",
@@ -104,7 +104,7 @@ export default function CitasPage() {
     time: "",
     duration: 60,
     details: "",
-    stylist: "Damaris" as "Damaris" | "Fabiola" | "Carolina" | "Lizday",
+    stylist: "Damaris" as "Damaris" | "Fabiola" | "Karolina" | "Lizday" | "Stella",
   })
 
   useEffect(() => {
@@ -160,7 +160,7 @@ export default function CitasPage() {
   const handleOpenModal = (
     date?: Date,
     time?: string,
-    stylist?: "Damaris" | "Fabiola" | "Carolina" | "Lizday",
+    stylist?: "Damaris" | "Fabiola" | "Karolina" | "Lizday" | "Stella",
     appointment?: Appointment
   ) => {
     if (appointment) {
@@ -170,7 +170,7 @@ export default function CitasPage() {
         time: appointment.time,
         duration: appointment.duration || 60,
         details: appointment.details,
-        stylist: appointment.stylist as "Damaris" | "Fabiola" | "Carolina" | "Lizday",
+        stylist: appointment.stylist as "Damaris" | "Fabiola" | "Karolina" | "Lizday" | "Stella",
       })
     } else {
       setEditingAppointment(null)
