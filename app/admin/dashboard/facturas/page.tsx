@@ -55,6 +55,15 @@ interface Invoice {
   type: string // Add type
 }
 
+interface InvoiceGroup {
+  id: string
+  type: 'group'
+  date: string
+  customerName: string
+  total: number
+  invoices: Invoice[]
+}
+
 // ... (In History List)
 
 
@@ -141,6 +150,63 @@ function FacturasContent() {
     if (filterType === "all") return invoices
     return invoices.filter((invoice) => invoice.type === filterType)
   }, [invoices, filterType])
+
+  const groupedInvoices = useMemo(() => {
+    const result: (Invoice | InvoiceGroup)[] = []
+    const groups: Record<string, InvoiceGroup> = {}
+    const processedInvoiceIds = new Set<string>()
+
+    // Identify potential groups
+    // Group by Date (YYYY-MM-DD) + CustomerName
+    // Only group if there are multiple invoices for the same person on the same day
+
+    // First pass: Count occurrences
+    const counts: Record<string, number> = {}
+
+    filteredInvoices.forEach(inv => {
+      if (inv.customerName && inv.customerName !== "Cliente General" && inv.customerName !== "N/A") {
+        const dateKey = new Date(inv.date).toISOString().split('T')[0]
+        const key = `${dateKey}|${inv.customerName.trim().toLowerCase()}`
+        counts[key] = (counts[key] || 0) + 1
+      }
+    })
+
+    // Second pass: Build groups and result
+    filteredInvoices.forEach(inv => {
+      if (processedInvoiceIds.has(inv.id)) return
+
+      let isGrouped = false
+      if (inv.customerName && inv.customerName !== "Cliente General" && inv.customerName !== "N/A") {
+        const dateKey = new Date(inv.date).toISOString().split('T')[0]
+        const key = `${dateKey}|${inv.customerName.trim().toLowerCase()}`
+
+        if (counts[key] > 1) {
+          isGrouped = true
+          if (!groups[key]) {
+            groups[key] = {
+              id: `group-${key}`,
+              type: 'group',
+              date: inv.date, // Use first invoice date as representative
+              customerName: inv.customerName,
+              total: 0,
+              invoices: []
+            }
+            result.push(groups[key])
+          }
+          groups[key].invoices.push(inv)
+          groups[key].total += inv.total
+          processedInvoiceIds.add(inv.id)
+        }
+      }
+
+      if (!isGrouped) {
+        result.push(inv)
+        processedInvoiceIds.add(inv.id)
+      }
+    })
+
+    return result
+  }, [filteredInvoices])
 
   useEffect(() => {
     // Fetch products from DB
@@ -806,119 +872,238 @@ function FacturasContent() {
             </Select>
           </div>
 
-          {filteredInvoices.length === 0 ? (
+          {groupedInvoices.length === 0 ? (
             <div className="bg-card border border-border rounded-xl p-12 text-center">
               <FileText className="w-16 h-16 text-muted-foreground/50 mx-auto mb-4" />
               <h3 className="text-xl font-semibold text-foreground mb-2">No hay facturas</h3>
               <p className="text-muted-foreground">Las facturas generadas aparecerán aquí.</p>
             </div>
           ) : (
-            filteredInvoices.map((invoice) => (
-              <div key={invoice.id} className="bg-card border border-border rounded-xl overflow-hidden">
-                <button
-                  onClick={() => setExpandedInvoice(expandedInvoice === invoice.id ? null : invoice.id)}
-                  className="w-full p-4 flex items-center justify-between hover:bg-muted/50 transition-colors"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="p-2 bg-primary/10 rounded-lg">
-                      <FileText className="w-5 h-5 text-primary" />
-                    </div>
-                    <div className="text-left">
-                      <div className="flex flex-col gap-0.5">
-                        <div className="flex items-center gap-2">
-                          <p className="font-semibold text-foreground text-lg">
-                            {invoice.customerName && invoice.customerName !== "Cliente General" ? invoice.customerName :
-                              invoice.type === 'diaria-servicios' ? 'Venta de Servicios' :
-                                invoice.type === 'diaria-productos' ? 'Venta de Productos' :
-                                  'Venta General'}
-                          </p>
-                          <span className={`text-[10px] px-2 py-0.5 rounded-full border ${invoice.type === 'diaria-servicios' ? 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-800' :
-                            invoice.type === 'diaria-productos' ? 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800' :
-                              'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700'
-                            }`}>
-                            {invoice.type === 'diaria-servicios' ? 'Servicios' :
-                              invoice.type === 'diaria-productos' ? 'Productos' : 'General'}
-                          </span>
+            groupedInvoices.map((item) => {
+              if (item.type === 'group') {
+                const group = item as InvoiceGroup
+                const isExpanded = expandedInvoice === group.id
+
+                return (
+                  <div key={group.id} className="bg-card border border-border rounded-xl overflow-hidden mb-4 shadow-sm">
+                    <button
+                      onClick={() => setExpandedInvoice(isExpanded ? null : group.id)}
+                      className="w-full p-4 flex items-center justify-between hover:bg-muted/50 transition-colors bg-muted/10"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                          <Package className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                         </div>
-                        <p className="text-xs text-muted-foreground font-mono">ID: {invoice.id.slice(0, 8)}...</p>
+                        <div className="text-left">
+                          <div className="flex flex-col gap-0.5">
+                            <div className="flex items-center gap-2">
+                              <p className="font-semibold text-foreground text-lg">
+                                {group.customerName}
+                              </p>
+                              <span className="text-[10px] px-2 py-0.5 rounded-full border bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800">
+                                Agrupado ({group.invoices.length})
+                              </span>
+                            </div>
+                            <p className="text-sm text-muted-foreground">
+                              {new Date(group.date).toLocaleDateString("es-CO", {
+                                year: "numeric",
+                                month: "long",
+                                day: "numeric",
+                              })}
+                            </p>
+                          </div>
+                        </div>
                       </div>
-                      <p className="text-sm text-muted-foreground">
-                        {new Date(invoice.date).toLocaleDateString("es-CO", {
-                          year: "numeric",
-                          month: "long",
-                          day: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <div className="text-right">
-                      <p className="font-bold text-primary">${Math.round(invoice.total).toLocaleString()}</p>
-                      <p className="text-sm text-muted-foreground">{invoice.items.length} productos</p>
-                    </div>
-                    {expandedInvoice === invoice.id ? (
-                      <ChevronUp className="w-5 h-5 text-muted-foreground" />
-                    ) : (
-                      <ChevronDown className="w-5 h-5 text-muted-foreground" />
+                      <div className="flex items-center gap-4">
+                        <div className="text-right">
+                          <p className="font-bold text-primary text-xl">${Math.round(group.total).toLocaleString()}</p>
+                          <p className="text-xs text-muted-foreground">Total Acumulado</p>
+                        </div>
+                        {isExpanded ? (
+                          <ChevronUp className="w-5 h-5 text-muted-foreground" />
+                        ) : (
+                          <ChevronDown className="w-5 h-5 text-muted-foreground" />
+                        )}
+                      </div>
+                    </button>
+
+                    {isExpanded && (
+                      <div className="border-t border-border/50 divide-y divide-border/50">
+                        {group.invoices.map((invoice) => (
+                          <div key={invoice.id} className="p-4 pl-12 hover:bg-muted/30 transition-colors flex items-center justify-between group">
+                            <div className="flex items-center gap-4">
+                              <div className="p-1.5 bg-muted rounded">
+                                <FileText className="w-4 h-4 text-muted-foreground" />
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <p className="font-medium text-foreground">
+                                    {new Date(invoice.date).toLocaleTimeString("es-CO", { hour: '2-digit', minute: '2-digit' })}
+                                  </p>
+                                  <span className={`text-[10px] px-1.5 py-0.5 rounded border ${invoice.type === 'diaria-servicios' ? 'bg-purple-50 text-purple-700 border-purple-100' :
+                                    invoice.type === 'diaria-productos' ? 'bg-orange-50 text-orange-700 border-orange-100' :
+                                      'bg-gray-50 text-gray-700 border-gray-100'
+                                    }`}>
+                                    {invoice.type === 'diaria-servicios' ? 'Servicios' :
+                                      invoice.type === 'diaria-productos' ? 'Productos' : 'General'}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-muted-foreground font-mono">ID: {invoice.id.slice(0, 8)}...</p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-6">
+                              <div className="text-right mr-4">
+                                <p className="font-semibold text-foreground">${Math.round(invoice.total).toLocaleString()}</p>
+                                <p className="text-xs text-muted-foreground">{invoice.items.length} ítems</p>
+                              </div>
+                              <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                  onClick={() => {
+                                    setSelectedInvoice(invoice)
+                                    handlePrint(invoice)
+                                  }}
+                                  title="Reimprimir"
+                                  className="p-1.5 hover:bg-primary/10 text-primary rounded"
+                                >
+                                  <Printer className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => setSelectedInvoice(invoice)}
+                                  title="Ver Detalle"
+                                  className="p-1.5 hover:bg-muted text-foreground rounded border border-border"
+                                >
+                                  <Eye className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleDeleteInvoice(invoice.id)
+                                  }}
+                                  title="Eliminar"
+                                  className="p-1.5 hover:bg-red-100 text-red-600 rounded"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
-                </button>
+                )
+              }
 
-                {expandedInvoice === invoice.id && (
-                  <div className="p-4 border-t border-border bg-muted/30">
-                    <div className="mb-4">
-                      <p className="text-sm text-muted-foreground">
-                        Cliente: <span className="text-foreground">{invoice.customerName}</span>
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        Teléfono: <span className="text-foreground">{invoice.customerPhone}</span>
-                      </p>
-                    </div>
-                    <div className="space-y-2 mb-4">
-                      {invoice.items.map((item, index) => (
-                        <div key={index} className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">
-                            {item.name} x{item.quantity}
-                          </span>
-                          <span className="text-foreground">${(item.price * item.quantity).toLocaleString()}</span>
+              // Render individual invoice (existing logic)
+              const invoice = item as Invoice
+              return (
+                <div key={invoice.id} className="bg-card border border-border rounded-xl overflow-hidden mb-4">
+                  <button
+                    onClick={() => setExpandedInvoice(expandedInvoice === invoice.id ? null : invoice.id)}
+                    className="w-full p-4 flex items-center justify-between hover:bg-muted/50 transition-colors"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="p-2 bg-primary/10 rounded-lg">
+                        <FileText className="w-5 h-5 text-primary" />
+                      </div>
+                      <div className="text-left">
+                        <div className="flex flex-col gap-0.5">
+                          <div className="flex items-center gap-2">
+                            <p className="font-semibold text-foreground text-lg">
+                              {invoice.customerName && invoice.customerName !== "Cliente General" ? invoice.customerName :
+                                invoice.type === 'diaria-servicios' ? 'Venta de Servicios' :
+                                  invoice.type === 'diaria-productos' ? 'Venta de Productos' :
+                                    'Venta General'}
+                            </p>
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full border ${invoice.type === 'diaria-servicios' ? 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-800' :
+                              invoice.type === 'diaria-productos' ? 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800' :
+                                'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700'
+                              }`}>
+                              {invoice.type === 'diaria-servicios' ? 'Servicios' :
+                                invoice.type === 'diaria-productos' ? 'Productos' : 'General'}
+                            </span>
+                          </div>
+                          <p className="text-xs text-muted-foreground font-mono">ID: {invoice.id.slice(0, 8)}...</p>
                         </div>
-                      ))}
+                        <p className="text-sm text-muted-foreground">
+                          {new Date(invoice.date).toLocaleDateString("es-CO", {
+                            year: "numeric",
+                            month: "long",
+                            day: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </p>
+                      </div>
                     </div>
-                    <div className="flex gap-3">
-                      <button
-                        onClick={() => {
-                          setSelectedInvoice(invoice)
-                          handlePrint(invoice)
-                        }}
-                        className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-medium py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
-                      >
-                        <Printer className="w-4 h-4" />
-                        Reimprimir
-                      </button>
-                      <button
-                        onClick={() => setSelectedInvoice(invoice)}
-                        className="flex-1 bg-muted hover:bg-muted/80 text-foreground font-medium py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
-                      >
-                        <Eye className="w-4 h-4" />
-                        Ver Detalle
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleDeleteInvoice(invoice.id)
-                        }}
-                        className="flex-1 bg-red-50 hover:bg-red-100 text-red-600 font-medium py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                        Eliminar
-                      </button>
+                    <div className="flex items-center gap-4">
+                      <div className="text-right">
+                        <p className="font-bold text-primary">${Math.round(invoice.total).toLocaleString()}</p>
+                        <p className="text-sm text-muted-foreground">{invoice.items.length} productos</p>
+                      </div>
+                      {expandedInvoice === invoice.id ? (
+                        <ChevronUp className="w-5 h-5 text-muted-foreground" />
+                      ) : (
+                        <ChevronDown className="w-5 h-5 text-muted-foreground" />
+                      )}
                     </div>
-                  </div>
-                )}
-              </div>
-            ))
+                  </button>
+
+                  {expandedInvoice === invoice.id && (
+                    <div className="p-4 border-t border-border bg-muted/30">
+                      <div className="mb-4">
+                        <p className="text-sm text-muted-foreground">
+                          Cliente: <span className="text-foreground">{invoice.customerName}</span>
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          Teléfono: <span className="text-foreground">{invoice.customerPhone}</span>
+                        </p>
+                      </div>
+                      <div className="space-y-2 mb-4">
+                        {invoice.items.map((item, index) => (
+                          <div key={index} className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">
+                              {item.name} x{item.quantity}
+                            </span>
+                            <span className="text-foreground">${(item.price * item.quantity).toLocaleString()}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex gap-3">
+                        <button
+                          onClick={() => {
+                            setSelectedInvoice(invoice)
+                            handlePrint(invoice)
+                          }}
+                          className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-medium py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
+                        >
+                          <Printer className="w-4 h-4" />
+                          Reimprimir
+                        </button>
+                        <button
+                          onClick={() => setSelectedInvoice(invoice)}
+                          className="flex-1 bg-muted hover:bg-muted/80 text-foreground font-medium py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
+                        >
+                          <Eye className="w-4 h-4" />
+                          Ver Detalle
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleDeleteInvoice(invoice.id)
+                          }}
+                          className="flex-1 bg-red-50 hover:bg-red-100 text-red-600 font-medium py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          Eliminar
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })
           )}
         </div>
       )}

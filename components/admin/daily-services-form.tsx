@@ -8,8 +8,25 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Trash2 } from "lucide-react"
+import { Trash2, ChevronDown, ChevronUp, User } from "lucide-react"
 import { toast } from "sonner"
+import {
+    Accordion,
+    AccordionContent,
+    AccordionItem,
+    AccordionTrigger
+} from "@/components/ui/accordion"
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 const STYLISTS = ["Damaris", "Fabiola", "Lizday", "Stella", "Karolina", "Keyner"]
 
@@ -73,6 +90,15 @@ export function DailyServicesForm({ date, operations, onSelectionChange, selecte
         }
     }
 
+    // Group operations by stylist
+    const groupedOperations = operations.reduce((acc, op) => {
+        if (!acc[op.stylist]) {
+            acc[op.stylist] = []
+        }
+        acc[op.stylist].push(op)
+        return acc
+    }, {} as Record<string, DailyOperation[]>)
+
     return (
         <div className="space-y-6">
             <Card>
@@ -124,76 +150,125 @@ export function DailyServicesForm({ date, operations, onSelectionChange, selecte
 
             <Card>
                 <CardHeader>
-                    <CardTitle>Servicios del Día</CardTitle>
+                    <CardTitle>Servicios del Día por Estilista</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead className="w-[50px]">
-                                    <Checkbox
-                                        checked={operations.length > 0 && operations.filter(op => op.status !== 'facturada').every(op => selectedIds.includes(op.id))}
-                                        onCheckedChange={(checked) => {
-                                            if (checked) {
-                                                const availableIds = operations.filter(op => op.status !== 'facturada').map(op => op.id)
-                                                onSelectionChange(availableIds)
-                                            } else {
-                                                onSelectionChange([])
-                                            }
-                                        }}
-                                    />
-                                </TableHead>
-                                <TableHead>Usuario</TableHead>
-                                <TableHead>Descripción</TableHead>
-                                <TableHead className="text-right">Valor</TableHead>
-                                <TableHead className="text-right">Estado</TableHead>
-                                <TableHead className="w-[50px]"></TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {operations.length === 0 ? (
-                                <TableRow>
-                                    <TableCell colSpan={6} className="text-center text-muted-foreground">
-                                        No hay servicios registrados hoy
-                                    </TableCell>
-                                </TableRow>
-                            ) : (
-                                operations.map((op) => (
-                                    <TableRow
-                                        key={op.id}
-                                        className={selectedIds.includes(op.id) ? "bg-[#cba557]/20 hover:bg-[#cba557]/30 data-[state=selected]:bg-[#cba557]/20" : ""}
-                                    >
-                                        <TableCell>
-                                            <Checkbox
-                                                checked={selectedIds.includes(op.id)}
-                                                onCheckedChange={() => toggleSelection(op.id)}
-                                                disabled={op.status === 'facturada'}
-                                            />
-                                        </TableCell>
-                                        <TableCell>{op.stylist}</TableCell>
-                                        <TableCell>{op.description}</TableCell>
-                                        <TableCell className="text-right">${op.amount.toLocaleString()}</TableCell>
-                                        <TableCell className="text-right">
-                                            <span className={`px-2 py-1 rounded-full text-xs ${op.status === 'facturada' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                                                }`}>
-                                                {op.status}
-                                            </span>
-                                        </TableCell>
-                                        <TableCell>
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                onClick={() => handleDelete(op.id)}
-                                                disabled={op.status === 'facturada'}
-                                            >
-                                                <Trash2 className="h-4 w-4 text-destructive" />
-                                            </Button>
-                                        </TableCell>
-                                    </TableRow>
-                                ))
-                            )}
-                        </TableBody>
-                    </Table>
+                    {Object.keys(groupedOperations).length === 0 ? (
+                        <div className="text-center py-8 text-muted-foreground">
+                            No hay servicios registrados hoy
+                        </div>
+                    ) : (
+                        <Accordion type="multiple" className="space-y-4">
+                            {Object.entries(groupedOperations).map(([stylistName, stylistOps]) => {
+                                const totalAmount = stylistOps.reduce((sum, op) => sum + op.amount, 0)
+                                const allSelected = stylistOps.length > 0 && stylistOps.filter(op => op.status !== 'facturada').every(op => selectedIds.includes(op.id))
+
+                                return (
+                                    <AccordionItem key={stylistName} value={stylistName} className="border rounded-lg overflow-hidden">
+                                        <div className="flex items-center justify-between p-4 bg-muted/20 hover:bg-muted/30 transition-colors">
+                                            <div className="flex items-center gap-4 flex-1">
+                                                <Checkbox
+                                                    checked={allSelected}
+                                                    onCheckedChange={(checked) => {
+                                                        const stylistOpIds = stylistOps.filter(op => op.status !== 'facturada').map(op => op.id)
+                                                        if (checked) {
+                                                            // Add all from this stylist not already selected
+                                                            const toAdd = stylistOpIds.filter(id => !selectedIds.includes(id))
+                                                            onSelectionChange([...selectedIds, ...toAdd])
+                                                        } else {
+                                                            // Remove all from this stylist
+                                                            onSelectionChange(selectedIds.filter(id => !stylistOpIds.includes(id)))
+                                                        }
+                                                    }}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                />
+                                                <div className="flex items-center gap-3">
+                                                    <div className="p-2 bg-primary/10 rounded-full">
+                                                        <User className="h-5 w-5 text-primary" />
+                                                    </div>
+                                                    <div>
+                                                        <h3 className="font-semibold text-lg">{stylistName}</h3>
+                                                        <p className="text-sm text-muted-foreground">{stylistOps.length} servicios realizados</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex items-center gap-6">
+                                                <div className="text-right mr-2">
+                                                    <p className="text-xl font-bold text-primary">${totalAmount.toLocaleString()}</p>
+                                                    <p className="text-xs text-muted-foreground">Total Día</p>
+                                                </div>
+                                                <AccordionTrigger className="hover:no-underline py-0 pr-2">
+                                                    <span className="sr-only">Ver detalles</span>
+                                                </AccordionTrigger>
+                                            </div>
+                                        </div>
+
+                                        <AccordionContent className="border-t">
+                                            <Table>
+                                                <TableHeader>
+                                                    <TableRow>
+                                                        <TableHead className="w-[50px]"></TableHead>
+                                                        <TableHead>Descripción</TableHead>
+                                                        <TableHead className="text-right">Valor</TableHead>
+                                                        <TableHead className="text-right">Estado</TableHead>
+                                                        <TableHead className="w-[50px]"></TableHead>
+                                                    </TableRow>
+                                                </TableHeader>
+                                                <TableBody>
+                                                    {stylistOps.map((op) => (
+                                                        <TableRow key={op.id} className={selectedIds.includes(op.id) ? "bg-[#cba557]/10" : ""}>
+                                                            <TableCell>
+                                                                <Checkbox
+                                                                    checked={selectedIds.includes(op.id)}
+                                                                    onCheckedChange={() => toggleSelection(op.id)}
+                                                                    disabled={op.status === 'facturada'}
+                                                                />
+                                                            </TableCell>
+                                                            <TableCell>{op.description}</TableCell>
+                                                            <TableCell className="text-right">${op.amount.toLocaleString()}</TableCell>
+                                                            <TableCell className="text-right">
+                                                                <span className={`px-2 py-1 rounded-full text-xs ${op.status === 'facturada' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                                                                    {op.status}
+                                                                </span>
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                <AlertDialog>
+                                                                    <AlertDialogTrigger asChild>
+                                                                        <Button
+                                                                            variant="ghost"
+                                                                            size="icon"
+                                                                            disabled={op.status === 'facturada'}
+                                                                        >
+                                                                            <Trash2 className="h-4 w-4 text-destructive" />
+                                                                        </Button>
+                                                                    </AlertDialogTrigger>
+                                                                    <AlertDialogContent>
+                                                                        <AlertDialogHeader>
+                                                                            <AlertDialogTitle>¿Eliminar servicio?</AlertDialogTitle>
+                                                                            <AlertDialogDescription>
+                                                                                Esta acción no se puede deshacer.
+                                                                            </AlertDialogDescription>
+                                                                        </AlertDialogHeader>
+                                                                        <AlertDialogFooter>
+                                                                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                                            <AlertDialogAction onClick={() => handleDelete(op.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                                                                                Eliminar
+                                                                            </AlertDialogAction>
+                                                                        </AlertDialogFooter>
+                                                                    </AlertDialogContent>
+                                                                </AlertDialog>
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    ))}
+                                                </TableBody>
+                                            </Table>
+                                        </AccordionContent>
+                                    </AccordionItem>
+                                )
+                            })}
+                        </Accordion>
+                    )}
                 </CardContent>
             </Card>
         </div>

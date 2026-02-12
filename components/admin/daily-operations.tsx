@@ -6,9 +6,21 @@ import { format } from "date-fns"
 import { es } from "date-fns/locale"
 import { Calendar as CalendarIcon } from "lucide-react"
 
-import { generateInvoiceFromDaily } from "@/app/actions/daily-operations"
+import { generateInvoiceFromDaily, deleteDailyOperations, deleteDailyProductSales } from "@/app/actions/daily-operations"
 import { DailyServicesForm } from "./daily-services-form"
 import { DailyProductsForm } from "./daily-products-form"
+
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
@@ -30,6 +42,7 @@ export function DailyOperations({ date, operations, productSales, products }: Da
     const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([])
     const [selectedProductSaleIds, setSelectedProductSaleIds] = useState<string[]>([])
     const [isGenerating, setIsGenerating] = useState(false)
+    const [isDeleting, setIsDeleting] = useState(false)
     const [activeTab, setActiveTab] = useState("services")
 
     const handleDateSelect = (date: Date | undefined) => {
@@ -61,6 +74,26 @@ export function DailyOperations({ date, operations, productSales, products }: Da
             toast.error("Error al generar factura")
         } finally {
             setIsGenerating(false)
+        }
+    }
+
+    const handleBulkDelete = async () => {
+        if (totalSelected === 0) return
+
+        setIsDeleting(true)
+        try {
+            await Promise.all([
+                selectedServiceIds.length > 0 ? deleteDailyOperations(selectedServiceIds) : Promise.resolve(),
+                selectedProductSaleIds.length > 0 ? deleteDailyProductSales(selectedProductSaleIds) : Promise.resolve()
+            ])
+            toast.success("Elementos eliminados correctamente")
+            setSelectedServiceIds([])
+            setSelectedProductSaleIds([])
+            router.refresh()
+        } catch (error) {
+            toast.error("Error al eliminar elementos")
+        } finally {
+            setIsDeleting(false)
         }
     }
 
@@ -102,14 +135,39 @@ export function DailyOperations({ date, operations, productSales, products }: Da
 
             <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/20">
                 <div className="text-sm">
-                    <span className="font-semibold">{totalSelected}</span> ítems seleccionados para facturar
+                    <span className="font-semibold">{totalSelected}</span> ítems seleccionados
                 </div>
-                <Button
-                    onClick={handleGenerateInvoice}
-                    disabled={totalSelected === 0 || isGenerating}
-                >
-                    {isGenerating ? "Generando..." : "Generar Factura General"}
-                </Button>
+                <div className="flex gap-2">
+                    {totalSelected > 0 && (
+                        <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                                <Button variant="destructive" disabled={isDeleting || isGenerating}>
+                                    {isDeleting ? "Eliminando..." : `Eliminar (${totalSelected})`}
+                                </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                    <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                        Esta acción eliminará {totalSelected} elementos seleccionados permanentemente.
+                                    </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                    <AlertDialogAction onClick={handleBulkDelete} className="bg-destructive text-white hover:bg-destructive/90">
+                                        Eliminar
+                                    </AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        </AlertDialog>
+                    )}
+                    <Button
+                        onClick={handleGenerateInvoice}
+                        disabled={totalSelected === 0 || isGenerating || isDeleting}
+                    >
+                        {isGenerating ? "Generando..." : "Generar Factura General"}
+                    </Button>
+                </div>
             </div>
 
             <Tabs defaultValue="services" value={activeTab} onValueChange={setActiveTab} className="space-y-4">

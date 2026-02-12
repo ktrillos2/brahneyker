@@ -30,6 +30,12 @@ export async function deleteDailyOperation(id: string) {
     revalidatePath("/admin/daily-invoices")
 }
 
+export async function deleteDailyOperations(ids: string[]) {
+    if (ids.length === 0) return
+    await db.delete(dailyOperations).where(inArray(dailyOperations.id, ids))
+    revalidatePath("/admin/daily-invoices")
+}
+
 // Daily Product Sales
 
 export async function addDailyProductSale(data: {
@@ -64,6 +70,12 @@ export async function getDailyProductSales(date: string) {
 
 export async function deleteDailyProductSale(id: string) {
     await db.delete(dailyProductSales).where(eq(dailyProductSales.id, id))
+    revalidatePath("/admin/daily-invoices")
+}
+
+export async function deleteDailyProductSales(ids: string[]) {
+    if (ids.length === 0) return
+    await db.delete(dailyProductSales).where(inArray(dailyProductSales.id, ids))
     revalidatePath("/admin/daily-invoices")
 }
 
