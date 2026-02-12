@@ -74,6 +74,7 @@ export const dailyOperations = sqliteTable("daily_operations", {
     id: text("id").primaryKey(),
     date: text("date").notNull(), // YYYY-MM-DD
     stylist: text("stylist").notNull(), // "Damaris" | "Fabiola" | "Lizday" | "Stella" | "Karolina"
+    clientName: text("client_name"),
     description: text("description").notNull(),
     amount: real("amount").notNull(),
     status: text("status").notNull().default("pendiente"), // "pendiente" | "facturada"

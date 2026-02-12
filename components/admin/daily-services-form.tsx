@@ -28,11 +28,12 @@ import {
     AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 
-const STYLISTS = ["Damaris", "Fabiola", "Lizday", "Stella", "Karolina", "Keyner"]
+const STYLISTS = ["Damaris", "Fabiola", "Lizday", "Stella", "Karolina"]
 
 interface DailyOperation {
     id: string
     stylist: string
+    clientName?: string | null
     description: string
     amount: number
     status: string
@@ -47,6 +48,7 @@ interface DailyServicesFormProps {
 
 export function DailyServicesForm({ date, operations, onSelectionChange, selectedIds }: DailyServicesFormProps) {
     const [stylist, setStylist] = useState<string>("")
+    const [clientName, setClientName] = useState("")
     const [description, setDescription] = useState("")
     const [amount, setAmount] = useState("")
     const [isSubmitting, setIsSubmitting] = useState(false)
@@ -59,10 +61,12 @@ export function DailyServicesForm({ date, operations, onSelectionChange, selecte
         try {
             await addDailyOperation({
                 stylist,
+                clientName,
                 description,
                 amount: parseFloat(amount.replace(/\./g, "").replace(/,/g, "")),
                 date,
             })
+            setClientName("")
             setDescription("")
             setAmount("")
             toast.success("Servicio agregado")
@@ -119,6 +123,14 @@ export function DailyServicesForm({ date, operations, onSelectionChange, selecte
                                     ))}
                                 </SelectContent>
                             </Select>
+                        </div>
+                        <div className="space-y-2 flex-1">
+                            <label className="text-sm font-medium">Cliente (Opcional)</label>
+                            <Input
+                                value={clientName}
+                                onChange={e => setClientName(e.target.value)}
+                                placeholder="Nombre del cliente"
+                            />
                         </div>
                         <div className="space-y-2 flex-1">
                             <label className="text-sm font-medium">Descripción</label>
@@ -225,7 +237,16 @@ export function DailyServicesForm({ date, operations, onSelectionChange, selecte
                                                                     disabled={op.status === 'facturada'}
                                                                 />
                                                             </TableCell>
-                                                            <TableCell>{op.description}</TableCell>
+                                                            <TableCell>
+                                                                <div className="flex flex-col">
+                                                                    <span>{op.description}</span>
+                                                                    {op.clientName && (
+                                                                        <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                                                            <User className="h-3 w-3" /> {op.clientName}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </TableCell>
                                                             <TableCell className="text-right">${op.amount.toLocaleString()}</TableCell>
                                                             <TableCell className="text-right">
                                                                 <span className={`px-2 py-1 rounded-full text-xs ${op.status === 'facturada' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>

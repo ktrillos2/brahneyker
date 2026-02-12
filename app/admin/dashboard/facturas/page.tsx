@@ -3,8 +3,9 @@
 import type React from "react"
 import { Suspense } from "react"
 import { useState, useEffect, useRef, useMemo } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { getProducts, updateProduct } from "@/app/actions/inventory"
-import { createInvoice, getInvoices, deleteInvoice } from "@/app/actions/invoices"
+import { createInvoice, getInvoices, deleteInvoice, generateWeeklyInvoice } from "@/app/actions/invoices"
 import {
   Search,
   Plus,
@@ -17,6 +18,7 @@ import {
   ChevronDown,
   ChevronUp,
   ScanLine,
+  User,
 } from "lucide-react"
 import {
   Select,
@@ -25,6 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Skeleton } from "@/components/ui/skeleton"
 
 interface Product {
   id: string
@@ -74,13 +77,30 @@ function FacturasContent() {
   const [barcodeInput, setBarcodeInput] = useState("")
   const [customerName, setCustomerName] = useState("")
   const [customerPhone, setCustomerPhone] = useState("")
-  const [showHistory, setShowHistory] = useState(false)
+  const searchParams = useSearchParams()
+  const initialView = searchParams.get('view') as 'new' | 'general_history' | 'daily_history' | null
+  const [viewMode, setViewMode] = useState<'new' | 'general_history' | 'daily_history'>(initialView || 'new')
+
+  // Initialize to current week's Monday
+  const getCurrentWeekMonday = () => {
+    const d = new Date()
+    const day = d.getDay()
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1)
+    const monday = new Date(d)
+    monday.setDate(diff)
+    monday.setHours(0, 0, 0, 0)
+    return monday.toISOString()
+  }
+
+  const [selectedWeek, setSelectedWeek] = useState<string>(getCurrentWeekMonday())
   const [filterType, setFilterType] = useState<string>("all")
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null)
   const [expandedInvoice, setExpandedInvoice] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
   const [notification, setNotification] = useState<{ message: string; type: "success" | "error" } | null>(null)
   const barcodeInputRef = useRef<HTMLInputElement>(null)
   const printRef = useRef<HTMLDivElement>(null)
+  const isMounted = useRef(false)
 
 
   // Calculate product popularity based on invoice history
@@ -208,6 +228,100 @@ function FacturasContent() {
     return result
   }, [filteredInvoices])
 
+  const weeklyGroups = useMemo(() => {
+    if (viewMode !== 'daily_history') return []
+
+    // Group invoices by Week (Monday to Sunday)
+    const groups: Record<string, { id: string, start: Date, end: Date, total: number, invoices: Invoice[] }> = {}
+
+    invoices.forEach(inv => {
+      const d = new Date(inv.date)
+      // Get Monday of the week
+      const day = d.getDay()
+      const diff = d.getDate() - day + (day === 0 ? -6 : 1) // If Sunday (0), subtract 6 to get Monday. Else subtract day-1.
+      const monday = new Date(d)
+      monday.setDate(diff)
+      monday.setHours(0, 0, 0, 0)
+
+      const key = monday.toISOString()
+
+      if (!groups[key]) {
+        const sunday = new Date(monday)
+        sunday.setDate(monday.getDate() + 6)
+        sunday.setHours(23, 59, 59, 999)
+
+        groups[key] = {
+          id: key,
+          start: monday,
+          end: sunday,
+          total: 0,
+          invoices: []
+        }
+      }
+
+      // Check if invoice belongs to this week
+      // Use the key to find the group
+      if (groups[key]) {
+        groups[key].invoices.push(inv)
+        groups[key].total += inv.total
+      }
+    })
+
+    return Object.values(groups).sort((a, b) => b.start.getTime() - a.start.getTime())
+  }, [invoices, viewMode])
+
+  // Ensure current week is in the list of options even if empty
+  const weekOptions = useMemo(() => {
+    if (viewMode !== 'daily_history') return []
+
+    const options = [...weeklyGroups]
+    const currentMondayStr = getCurrentWeekMonday()
+
+    // Check if current week is already in groups
+    const hasCurrent = options.some(g => g.id === currentMondayStr)
+
+    if (!hasCurrent) {
+      const monday = new Date(currentMondayStr)
+      const sunday = new Date(monday)
+      sunday.setDate(monday.getDate() + 6)
+      sunday.setHours(23, 59, 59, 999)
+
+      options.unshift({
+        id: currentMondayStr,
+        start: monday,
+        end: sunday,
+        total: 0,
+        invoices: []
+      })
+    }
+
+    return options.sort((a, b) => b.start.getTime() - a.start.getTime())
+  }, [weeklyGroups, viewMode])
+
+  const displayedWeeklyGroups = useMemo(() => {
+    if (selectedWeek === 'all') return weekOptions
+    return weekOptions.filter(g => g.id === selectedWeek)
+  }, [weekOptions, selectedWeek])
+
+  const handleGenerateWeeklyInvoice = async (start: Date, end: Date) => {
+    // Format dates as YYYY-MM-DD for the server action
+    const startDateStr = start.toISOString().split('T')[0]
+    const endDateStr = end.toISOString().split('T')[0]
+
+    try {
+      const result = await generateWeeklyInvoice(startDateStr, endDateStr)
+      if (result.error) {
+        showNotification(result.error, "error")
+        return
+      }
+      showNotification("Factura semanal generada correctamente", "success")
+      setViewMode('general_history')
+    } catch (error) {
+      console.error(error)
+      showNotification("Error al generar factura semanal", "error")
+    }
+  }
+
   useEffect(() => {
     // Fetch products from DB
     const fetchProducts = async () => {
@@ -223,17 +337,45 @@ function FacturasContent() {
     // Load invoices from DB
     const fetchInvoices = async () => {
       try {
-        const data = await getInvoices(1, 100)
-        setInvoices(data.invoices as Invoice[])
+        let typeFilter = undefined
+        if (viewMode === 'general_history') typeFilter = 'general'
+        if (viewMode === 'daily_history') typeFilter = 'daily'
+
+        // Only fetch if we are in a history mode
+        if (viewMode !== 'new') {
+          const data = await getInvoices(1, 100, typeFilter)
+          setInvoices(data.invoices as Invoice[])
+        }
       } catch (error) {
         console.error("Error fetching invoices:", error)
         showNotification("Error al cargar historial de facturas", "error")
       }
     }
 
-    fetchProducts()
-    fetchInvoices()
-  }, [])
+
+
+    const loadData = async () => {
+      // Prevent double fetch in strict mode or rapid updates
+      if (isMounted.current) return
+      isMounted.current = true
+
+      setIsLoading(true)
+      try {
+        const promises = [fetchInvoices()]
+        // Only fetch products if we are in 'new' mode where they are needed for the UI
+        if (viewMode === 'new') {
+          promises.push(fetchProducts())
+        }
+        await Promise.all(promises)
+      } finally {
+        setIsLoading(false)
+        // Reset after a short delay to allow re-fetching if viewMode changes significantly later
+        setTimeout(() => { isMounted.current = false }, 500)
+      }
+    }
+
+    loadData()
+  }, [viewMode])
 
   // Local Storage Persistence
   const [isInitialized, setIsInitialized] = useState(false)
@@ -627,10 +769,10 @@ function FacturasContent() {
       )}
 
       {/* Tabs */}
-      <div className="flex gap-2">
+      <div className="flex gap-2 flex-wrap">
         <button
-          onClick={() => setShowHistory(false)}
-          className={`px-6 py-2.5 rounded-lg font-medium transition-all ${!showHistory
+          onClick={() => setViewMode('new')}
+          className={`px-6 py-2.5 rounded-lg font-medium transition-all ${viewMode === 'new'
             ? "bg-primary text-primary-foreground"
             : "bg-card border border-border text-muted-foreground hover:text-foreground"
             }`}
@@ -638,17 +780,26 @@ function FacturasContent() {
           Nueva Factura
         </button>
         <button
-          onClick={() => setShowHistory(true)}
-          className={`px-6 py-2.5 rounded-lg font-medium transition-all ${showHistory
+          onClick={() => setViewMode('general_history')}
+          className={`px-6 py-2.5 rounded-lg font-medium transition-all ${viewMode === 'general_history'
             ? "bg-primary text-primary-foreground"
             : "bg-card border border-border text-muted-foreground hover:text-foreground"
             }`}
         >
-          Historial ({invoices.length})
+          Historial General
+        </button>
+        <button
+          onClick={() => setViewMode('daily_history')}
+          className={`px-6 py-2.5 rounded-lg font-medium transition-all ${viewMode === 'daily_history'
+            ? "bg-primary text-primary-foreground"
+            : "bg-card border border-border text-muted-foreground hover:text-foreground"
+            }`}
+        >
+          Historial Facturación Diaria
         </button>
       </div>
 
-      {!showHistory ? (
+      {viewMode === 'new' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Left Column - Product Entry */}
           <div className="space-y-6">
@@ -854,7 +1005,133 @@ function FacturasContent() {
             )}
           </div>
         </div>
-      ) : (
+      )}
+
+      {viewMode === 'daily_history' && (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between gap-4 bg-muted/30 p-4 rounded-xl border border-border">
+            <div className="flex items-center gap-2">
+              <FileText className="w-5 h-5 text-primary" />
+              <h3 className="font-semibold text-foreground">Filtrar por Semana</h3>
+            </div>
+            <div className="w-full max-w-xs">
+              <Select value={selectedWeek} onValueChange={setSelectedWeek}>
+                <SelectTrigger className="bg-card border-border">
+                  <SelectValue placeholder="Seleccionar semana" />
+                </SelectTrigger>
+                <SelectContent>
+                  {weekOptions.map((group) => (
+                    <SelectItem key={group.id} value={group.id}>
+                      Semana del {group.start.toLocaleDateString("es-CO", { day: 'numeric', month: 'long' })}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {isLoading ? (
+            <div className="space-y-6">
+              {[1, 2].map((i) => (
+                <div key={i} className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
+                  <div className="p-6 border-b border-border bg-muted/10 flex justify-between items-center gap-4">
+                    <div className="space-y-2">
+                      <Skeleton className="h-6 w-48" />
+                      <Skeleton className="h-4 w-32" />
+                    </div>
+                    <Skeleton className="h-10 w-40" />
+                  </div>
+                  <div className="p-4 space-y-4">
+                    <Skeleton className="h-16 w-full" />
+                    <Skeleton className="h-16 w-full" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : displayedWeeklyGroups.length === 0 ? (
+            <div className="bg-card border border-border rounded-xl p-12 text-center">
+              <FileText className="w-16 h-16 text-muted-foreground/50 mx-auto mb-4" />
+              <h3 className="text-xl font-semibold text-foreground mb-2">No hay facturas para esta semana</h3>
+              <p className="text-muted-foreground">Selecciona otra semana o genera facturas diarias para verlas aquí.</p>
+            </div>
+          ) : (
+            displayedWeeklyGroups.map((group) => (
+              <div key={group.id} className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
+                <div className="p-6 border-b border-border bg-muted/10 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                  <div>
+                    <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                      <span className="capitalize">Semana del {group.start.toLocaleDateString("es-CO", { day: 'numeric', month: 'long' })}</span>
+                      <span className="text-muted-foreground font-normal">al {group.end.toLocaleDateString("es-CO", { day: 'numeric', month: 'long' })}</span>
+                    </h3>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {group.invoices.length} facturas • Total Acumulado: <span className="font-semibold text-foreground">${Math.round(group.total).toLocaleString()}</span>
+                    </p>
+                  </div>
+                  {group.invoices.length > 0 && (
+                    <button
+                      onClick={() => handleGenerateWeeklyInvoice(group.start, group.end)}
+                      className="bg-primary hover:bg-primary/90 text-primary-foreground font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+                    >
+                      <FileText className="w-4 h-4" />
+                      Generar Factura Semanal
+                    </button>
+                  )}
+                </div>
+                <div className="divide-y divide-border/50">
+                  {group.invoices.map((invoice) => (
+                    <div key={invoice.id} className="p-4 flex items-center justify-between hover:bg-muted/30 transition-colors">
+                      <div className="flex items-center gap-4">
+                        <div className={`p-2 rounded-full ${invoice.type === 'diaria-servicios' ? 'bg-purple-100 text-purple-600' : 'bg-orange-100 text-orange-600'
+                          }`}>
+                          {invoice.type === 'diaria-servicios' ? <User className="w-4 h-4" /> : <Package className="w-4 h-4" />}
+                        </div>
+                        <div>
+                          <p className="font-medium text-foreground">
+                            {new Date(invoice.date).toLocaleDateString("es-CO", { weekday: 'long', day: 'numeric', month: 'long' })}
+                          </p>
+                          <div className="text-xs text-muted-foreground mt-1 space-y-0.5">
+                            {invoice.items && invoice.items.length > 0 ? (
+                              invoice.items.slice(0, 5).map((item, idx) => (
+                                <p key={idx} className="truncate max-w-[300px]">• {item.name}</p>
+                              ))
+                            ) : (
+                              <p>{invoice.type === 'diaria-servicios' ? 'Servicios del día' : 'Ventas de productos'}</p>
+                            )}
+                            {invoice.items && invoice.items.length > 5 && <p>... +{invoice.items.length - 5} más</p>}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-6">
+                        <p className="font-semibold text-foreground">${Math.round(invoice.total).toLocaleString()}</p>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => {
+                              setSelectedInvoice(invoice)
+                            }}
+                            className="p-2 hover:bg-muted text-muted-foreground hover:text-foreground rounded-lg transition-colors"
+                            title="Ver detalles"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteInvoice(invoice.id)}
+                            className="p-2 hover:bg-red-100 text-red-600 rounded-lg transition-colors"
+                            title="Eliminar factura diaria (restaura operaciones)"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+
+      {viewMode === 'general_history' && (
         /* Invoice History */
         <div className="space-y-4">
           <div className="flex justify-between items-center bg-card border border-border p-4 rounded-xl">
@@ -1128,48 +1405,89 @@ function FacturasContent() {
               </p>
 
               <div className="text-left bg-muted/30 rounded-lg p-4 mb-4 max-h-60 overflow-y-auto">
-                <h5 className="font-semibold text-sm mb-2">Productos:</h5>
-                <div className="space-y-2">
-                  {selectedInvoice.items.map((item, idx) => (
-                    <div key={idx} className="flex justify-between text-sm">
-                      <span>{item.name} <span className="text-muted-foreground">x{item.quantity}</span></span>
-                      <span className="font-medium">${(item.price * item.quantity).toLocaleString()}</span>
-                    </div>
-                  ))}
+                  <h5 className="font-semibold text-sm mb-2">
+                    {selectedInvoice.type === 'diaria-servicios' ? 'Servicios Realizados:' : 'Productos:'}
+                  </h5>
+                  <div className="space-y-2">
+                    <div className="space-y-4">
+                      {selectedInvoice.type === 'diaria-servicios' ? (
+                        Object.entries(
+                          selectedInvoice.items.reduce((acc, item) => {
+                            // Extract Stylist Name (Format: "Stylist: Description")
+                            const parts = item.name.split(':')
+                            const hasStylistPrefix = parts.length > 1
+                            const stylist = hasStylistPrefix ? parts[0].trim() : 'General / Sin Estilista'
+                            const description = hasStylistPrefix ? parts.slice(1).join(':').trim() : item.name
+
+                            if (!acc[stylist]) {
+                              acc[stylist] = { items: [], total: 0 }
+                            }
+                            acc[stylist].items.push({ ...item, name: description })
+                            acc[stylist].total += (item.price * item.quantity)
+                            return acc
+                          }, {} as Record<string, { items: InvoiceItem[], total: number }>)
+                        ).map(([stylist, group]) => (
+                            <div key={stylist} className="border-b border-border/50 pb-2 last:border-0 last:pb-0">
+                              <div className="flex justify-between items-center mb-2">
+                                <h6 className="font-semibold text-sm text-foreground flex items-center gap-2">
+                                  <User className="w-3 h-3" /> {stylist}
+                                </h6>
+                                <span className="font-bold text-sm">${group.total.toLocaleString()}</span>
+                              </div>
+                              <div className="space-y-1 pl-4 border-l-2 border-muted">
+                                {group.items.map((item, idx) => (
+                                  <div key={idx} className="flex justify-between text-xs text-muted-foreground">
+                                    <span>{item.name}</span>
+                                    <span>${(item.price * item.quantity).toLocaleString()}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                            ))
+                            ) : (
+                      // Default View (Products / General)
+                      selectedInvoice.items.map((item, idx) => (
+                            <div key={idx} className="flex justify-between text-sm">
+                              <span>{item.name} <span className="text-muted-foreground">x{item.quantity}</span></span>
+                              <span className="font-medium">${(item.price * item.quantity).toLocaleString()}</span>
+                            </div>
+                            ))
+                    )}
+                          </div>
+                </div>
+                  </div>
+
+                  <p className="text-sm text-muted-foreground mb-6">La factura se ha guardado correctamente.</p>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setSelectedInvoice(null)}
+                      className="flex-1 bg-muted hover:bg-muted/80 text-foreground font-medium py-3 rounded-lg"
+                    >
+                      Cerrar
+                    </button>
+                    <button
+                      onClick={() => handlePrint(selectedInvoice)}
+                      className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-medium py-3 rounded-lg flex items-center justify-center gap-2"
+                    >
+                      <Printer className="w-4 h-4" />
+                      Reimprimir
+                    </button>
+                  </div>
                 </div>
               </div>
-
-              <p className="text-sm text-muted-foreground mb-6">La factura se ha guardado correctamente.</p>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setSelectedInvoice(null)}
-                  className="flex-1 bg-muted hover:bg-muted/80 text-foreground font-medium py-3 rounded-lg"
-                >
-                  Cerrar
-                </button>
-                <button
-                  onClick={() => handlePrint(selectedInvoice)}
-                  className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-medium py-3 rounded-lg flex items-center justify-center gap-2"
-                >
-                  <Printer className="w-4 h-4" />
-                  Reimprimir
-                </button>
-              </div>
             </div>
-          </div>
-        </div>
       )}
 
-      {/* Hidden Print Reference */}
-      <div ref={printRef} className="hidden" />
-    </div>
-  )
+            {/* Hidden Print Reference */}
+            <div ref={printRef} className="hidden" />
+          </div>
+          )
 }
 
-export default function FacturasPage() {
+          export default function FacturasPage() {
   return (
-    <Suspense fallback={<div className="p-8 text-center">Cargando facturación...</div>}>
-      <FacturasContent />
-    </Suspense>
-  )
+          <Suspense fallback={<div className="p-8 text-center">Cargando facturación...</div>}>
+            <FacturasContent />
+          </Suspense>
+          )
 }

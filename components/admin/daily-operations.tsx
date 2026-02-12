@@ -68,6 +68,7 @@ export function DailyOperations({ date, operations, productSales, products }: Da
                 toast.success("Factura generada exitosamente")
                 setSelectedServiceIds([])
                 setSelectedProductSaleIds([])
+                router.push("/admin/dashboard/facturas?view=daily_history")
                 router.refresh()
             }
         } catch (error) {

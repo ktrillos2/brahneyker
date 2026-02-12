@@ -9,6 +9,7 @@ import { revalidatePath } from "next/cache"
 
 export async function addDailyOperation(data: {
     stylist: string
+    clientName?: string
     description: string
     amount: number
     date: string
@@ -100,7 +101,7 @@ export async function generateInvoiceFromDaily(
             serviceInvoiceId = crypto.randomUUID()
             await db.insert(invoices).values({
                 id: serviceInvoiceId,
-                date: date,
+                date: date + 'T12:00:00',
                 customerName: "Servicios del Día - " + date,
                 customerPhone: "",
                 subtotal: subtotal,
@@ -145,7 +146,7 @@ export async function generateInvoiceFromDaily(
             productInvoiceId = crypto.randomUUID()
             await db.insert(invoices).values({
                 id: productInvoiceId,
-                date: date,
+                date: date + 'T12:00:00',
                 customerName: "Venta de Productos - " + date,
                 customerPhone: "",
                 subtotal: subtotal,
@@ -163,6 +164,14 @@ export async function generateInvoiceFromDaily(
                     quantity: sale.quantity,
                     price: sale.price || 0,
                 })
+
+                // Decrease stock
+                const product = await db.select().from(products).where(eq(products.id, sale.productId)).get()
+                if (product) {
+                    await db.update(products)
+                        .set({ quantity: product.quantity - sale.quantity })
+                        .where(eq(products.id, sale.productId))
+                }
             }
 
             await db.update(dailyProductSales)
