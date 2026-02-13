@@ -43,6 +43,24 @@ export async function deleteDailyOperations(ids: string[]) {
     revalidatePath("/admin/daily-invoices")
 }
 
+export async function updateDailyOperation(id: string, data: {
+    stylist: string
+    clientName?: string
+    description: string
+    amount: number
+}) {
+    try {
+        await db.update(dailyOperations)
+            .set(data)
+            .where(eq(dailyOperations.id, id))
+        revalidatePath("/admin/daily-invoices")
+        return { success: true }
+    } catch (error) {
+        console.error("Error updating daily operation:", error)
+        return { success: false, error: "Error al actualizar servicio. Verifique la conexión o contacte soporte." }
+    }
+}
+
 // Daily Product Sales
 
 export async function addDailyProductSale(data: {

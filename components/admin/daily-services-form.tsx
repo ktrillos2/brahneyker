@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { addDailyOperation, deleteDailyOperation } from "@/app/actions/daily-operations"
+import { addDailyOperation, deleteDailyOperation, updateDailyOperation } from "@/app/actions/daily-operations"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -27,6 +27,14 @@ import {
     AlertDialogTitle,
     AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog"
 
 const STYLISTS = ["Damaris", "Fabiola", "Lizday", "Stella", "Karolina"]
 
@@ -47,23 +55,35 @@ interface DailyServicesFormProps {
 }
 
 export function DailyServicesForm({ date, operations, onSelectionChange, selectedIds }: DailyServicesFormProps) {
+    // Add Form State
     const [stylist, setStylist] = useState<string>("")
     const [clientName, setClientName] = useState("")
     const [description, setDescription] = useState("")
     const [amount, setAmount] = useState("")
     const [isSubmitting, setIsSubmitting] = useState(false)
 
-    async function handleSubmit(e: React.FormEvent) {
+    // Edit Modal State
+    const [isEditOpen, setIsEditOpen] = useState(false)
+    const [editingId, setEditingId] = useState<string | null>(null)
+    const [editStylist, setEditStylist] = useState<string>("")
+    const [editClientName, setEditClientName] = useState("")
+    const [editDescription, setEditDescription] = useState("")
+    const [editAmount, setEditAmount] = useState("")
+    const [isUpdating, setIsUpdating] = useState(false)
+
+    async function handleAdd(e: React.FormEvent) {
         e.preventDefault()
         if (!stylist || !description || !amount) return
 
         setIsSubmitting(true)
         try {
+            const formattedAmount = parseFloat(amount.replace(/\./g, "").replace(/,/g, ""))
+
             const result = await addDailyOperation({
                 stylist,
                 clientName,
                 description,
-                amount: parseFloat(amount.replace(/\./g, "").replace(/,/g, "")),
+                amount: formattedAmount,
                 date,
             })
 
@@ -75,7 +95,7 @@ export function DailyServicesForm({ date, operations, onSelectionChange, selecte
             setClientName("")
             setDescription("")
             setAmount("")
-            toast.success("Servicio agregado")
+            toast.success("Servicio agregado correctamente")
         } catch (error) {
             toast.error("Error al agregar servicio")
         } finally {
@@ -83,12 +103,51 @@ export function DailyServicesForm({ date, operations, onSelectionChange, selecte
         }
     }
 
+    async function handleUpdate(e: React.FormEvent) {
+        e.preventDefault()
+        if (!editingId || !editStylist || !editDescription || !editAmount) return
+
+        setIsUpdating(true)
+        try {
+            const formattedAmount = parseFloat(editAmount.replace(/\./g, "").replace(/,/g, ""))
+
+            const result = await updateDailyOperation(editingId, {
+                stylist: editStylist,
+                clientName: editClientName,
+                description: editDescription,
+                amount: formattedAmount,
+            })
+
+            if (result && !result.success) {
+                toast.error(result.error || "Error al actualizar servicio")
+                return
+            }
+
+            setIsEditOpen(false)
+            setEditingId(null)
+            toast.success("Servicio actualizado correctamente")
+        } catch (error) {
+            toast.error("Error al actualizar servicio")
+        } finally {
+            setIsUpdating(false)
+        }
+    }
+
+    function openEditModal(op: DailyOperation) {
+        setEditingId(op.id)
+        setEditStylist(op.stylist)
+        setEditClientName(op.clientName || "")
+        setEditDescription(op.description)
+        setEditAmount(new Intl.NumberFormat("es-CO").format(op.amount))
+        setIsEditOpen(true)
+    }
+
     async function handleDelete(id: string) {
         try {
             await deleteDailyOperation(id)
-            toast.success("Servicio eliminado")
+            toast.success("Servicio eliminado correctamente")
         } catch (error) {
-            toast.error("Error al eliminar")
+            toast.error("Error al eliminar servicio")
         }
     }
 
@@ -116,7 +175,7 @@ export function DailyServicesForm({ date, operations, onSelectionChange, selecte
                     <CardTitle>Registrar Servicio</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <form onSubmit={handleSubmit} className="flex gap-4 items-end">
+                    <form onSubmit={handleAdd} className="flex gap-4 items-end">
                         <div className="space-y-2 w-[200px]">
                             <label className="text-sm font-medium">Usuario</label>
                             <Select value={stylist} onValueChange={setStylist}>
@@ -166,6 +225,79 @@ export function DailyServicesForm({ date, operations, onSelectionChange, selecte
                 </CardContent>
             </Card>
 
+            <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Editar Servicio</DialogTitle>
+                        <DialogDescription>
+                            Modifica los detalles del servicio seleccionado.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <form onSubmit={handleUpdate} className="space-y-4">
+                        <div className="grid gap-4 py-4">
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <label className="text-right text-sm font-medium">
+                                    Estilista
+                                </label>
+                                <Select value={editStylist} onValueChange={setEditStylist}>
+                                    <SelectTrigger className="col-span-3">
+                                        <SelectValue placeholder="Seleccionar" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {STYLISTS.map(s => (
+                                            <SelectItem key={s} value={s}>{s}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <label className="text-right text-sm font-medium">
+                                    Cliente
+                                </label>
+                                <Input
+                                    value={editClientName}
+                                    onChange={(e) => setEditClientName(e.target.value)}
+                                    className="col-span-3"
+                                    placeholder="Nombre del cliente"
+                                />
+                            </div>
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <label className="text-right text-sm font-medium">
+                                    Descripción
+                                </label>
+                                <Input
+                                    value={editDescription}
+                                    onChange={(e) => setEditDescription(e.target.value)}
+                                    className="col-span-3"
+                                />
+                            </div>
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <label className="text-right text-sm font-medium">
+                                    Valor
+                                </label>
+                                <Input
+                                    value={editAmount}
+                                    onChange={(e) => {
+                                        const value = e.target.value.replace(/\D/g, "")
+                                        const formatted = new Intl.NumberFormat("es-CO").format(Number(value))
+                                        setEditAmount(value ? formatted : "")
+                                    }}
+                                    className="col-span-3"
+                                />
+                            </div>
+                        </div>
+                        <DialogFooter>
+                            <Button type="button" variant="outline" onClick={() => setIsEditOpen(false)}>
+                                Cancelar
+                            </Button>
+                            <Button type="submit" disabled={isUpdating}>
+                                {isUpdating ? "Actualizando..." : "Confirmar"}
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
+
             <Card>
                 <CardHeader>
                     <CardTitle>Servicios del Día por Estilista</CardTitle>
@@ -183,44 +315,44 @@ export function DailyServicesForm({ date, operations, onSelectionChange, selecte
 
                                 return (
                                     <AccordionItem key={stylistName} value={stylistName} className="border rounded-lg overflow-hidden">
-                                        <div className="flex items-center justify-between p-4 bg-muted/20 hover:bg-muted/30 transition-colors">
+                                        <AccordionTrigger className="flex items-center justify-between p-4 bg-muted/20 hover:bg-muted/30 transition-colors hover:no-underline">
                                             <div className="flex items-center gap-4 flex-1">
-                                                <Checkbox
-                                                    checked={allSelected}
-                                                    onCheckedChange={(checked) => {
-                                                        const stylistOpIds = stylistOps.filter(op => op.status !== 'facturada').map(op => op.id)
-                                                        if (checked) {
-                                                            // Add all from this stylist not already selected
-                                                            const toAdd = stylistOpIds.filter(id => !selectedIds.includes(id))
-                                                            onSelectionChange([...selectedIds, ...toAdd])
-                                                        } else {
-                                                            // Remove all from this stylist
-                                                            onSelectionChange(selectedIds.filter(id => !stylistOpIds.includes(id)))
-                                                        }
-                                                    }}
-                                                    onClick={(e) => e.stopPropagation()}
-                                                />
-                                                <div className="flex items-center gap-3">
+                                                <div onClick={(e) => e.stopPropagation()}>
+                                                    <Checkbox
+                                                        checked={allSelected}
+                                                        onCheckedChange={(checked) => {
+                                                            const stylistOpIds = stylistOps.filter(op => op.status !== 'facturada').map(op => op.id)
+                                                            if (checked) {
+                                                                // Add all from this stylist not already selected
+                                                                const toAdd = stylistOpIds.filter(id => !selectedIds.includes(id))
+                                                                onSelectionChange([...selectedIds, ...toAdd])
+                                                            } else {
+                                                                // Remove all from this stylist
+                                                                onSelectionChange(selectedIds.filter(id => !stylistOpIds.includes(id)))
+                                                            }
+                                                        }}
+                                                    />
+                                                </div>
+                                                <div className="flex items-center gap-3 text-left">
                                                     <div className="p-2 bg-primary/10 rounded-full">
                                                         <User className="h-5 w-5 text-primary" />
                                                     </div>
                                                     <div>
                                                         <h3 className="font-semibold text-lg">{stylistName}</h3>
-                                                        <p className="text-sm text-muted-foreground">{stylistOps.length} servicios realizados</p>
+                                                        <p className="text-sm text-muted-foreground text-left font-normal">{stylistOps.length} servicios realizados</p>
                                                     </div>
                                                 </div>
                                             </div>
 
                                             <div className="flex items-center gap-6">
                                                 <div className="text-right mr-2">
-                                                    <p className="text-xl font-bold text-primary">${totalAmount.toLocaleString()}</p>
+                                                    <p className="text-xl font-bold text-primary">${totalAmount.toLocaleString('es-CO')}</p>
                                                     <p className="text-xs text-muted-foreground">Total Día</p>
                                                 </div>
-                                                <AccordionTrigger className="hover:no-underline py-0 pr-2">
-                                                    <span className="sr-only">Ver detalles</span>
-                                                </AccordionTrigger>
+                                                <ChevronDown className="h-4 w-4 shrink-0 transition-transform duration-200" />
                                             </div>
-                                        </div>
+                                        </AccordionTrigger>
+
 
                                         <AccordionContent className="border-t">
                                             <Table>
@@ -230,7 +362,7 @@ export function DailyServicesForm({ date, operations, onSelectionChange, selecte
                                                         <TableHead>Descripción</TableHead>
                                                         <TableHead className="text-right">Valor</TableHead>
                                                         <TableHead className="text-right">Estado</TableHead>
-                                                        <TableHead className="w-[50px]"></TableHead>
+                                                        <TableHead className="w-[100px] text-right">Acciones</TableHead>
                                                     </TableRow>
                                                 </TableHeader>
                                                 <TableBody>
@@ -253,38 +385,48 @@ export function DailyServicesForm({ date, operations, onSelectionChange, selecte
                                                                     )}
                                                                 </div>
                                                             </TableCell>
-                                                            <TableCell className="text-right">${op.amount.toLocaleString()}</TableCell>
+                                                            <TableCell className="text-right">${op.amount.toLocaleString('es-CO')}</TableCell>
                                                             <TableCell className="text-right">
                                                                 <span className={`px-2 py-1 rounded-full text-xs ${op.status === 'facturada' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
                                                                     {op.status}
                                                                 </span>
                                                             </TableCell>
-                                                            <TableCell>
-                                                                <AlertDialog>
-                                                                    <AlertDialogTrigger asChild>
-                                                                        <Button
-                                                                            variant="ghost"
-                                                                            size="icon"
-                                                                            disabled={op.status === 'facturada'}
-                                                                        >
-                                                                            <Trash2 className="h-4 w-4 text-destructive" />
-                                                                        </Button>
-                                                                    </AlertDialogTrigger>
-                                                                    <AlertDialogContent>
-                                                                        <AlertDialogHeader>
-                                                                            <AlertDialogTitle>¿Eliminar servicio?</AlertDialogTitle>
-                                                                            <AlertDialogDescription>
-                                                                                Esta acción no se puede deshacer.
-                                                                            </AlertDialogDescription>
-                                                                        </AlertDialogHeader>
-                                                                        <AlertDialogFooter>
-                                                                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                                            <AlertDialogAction onClick={() => handleDelete(op.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                                                                                Eliminar
-                                                                            </AlertDialogAction>
-                                                                        </AlertDialogFooter>
-                                                                    </AlertDialogContent>
-                                                                </AlertDialog>
+                                                            <TableCell className="text-right">
+                                                                <div className="flex items-center justify-end gap-1">
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                        disabled={op.status === 'facturada'}
+                                                                        onClick={() => openEditModal(op)}
+                                                                    >
+                                                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-pencil"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /><path d="m15 5 4 4" /></svg>
+                                                                    </Button>
+                                                                    <AlertDialog>
+                                                                        <AlertDialogTrigger asChild>
+                                                                            <Button
+                                                                                variant="ghost"
+                                                                                size="icon"
+                                                                                disabled={op.status === 'facturada'}
+                                                                            >
+                                                                                <Trash2 className="h-4 w-4 text-destructive" />
+                                                                            </Button>
+                                                                        </AlertDialogTrigger>
+                                                                        <AlertDialogContent>
+                                                                            <AlertDialogHeader>
+                                                                                <AlertDialogTitle>¿Eliminar servicio?</AlertDialogTitle>
+                                                                                <AlertDialogDescription>
+                                                                                    Esta acción no se puede deshacer.
+                                                                                </AlertDialogDescription>
+                                                                            </AlertDialogHeader>
+                                                                            <AlertDialogFooter>
+                                                                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                                                <AlertDialogAction onClick={() => handleDelete(op.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                                                                                    Eliminar
+                                                                                </AlertDialogAction>
+                                                                            </AlertDialogFooter>
+                                                                        </AlertDialogContent>
+                                                                    </AlertDialog>
+                                                                </div>
                                                             </TableCell>
                                                         </TableRow>
                                                     ))}
@@ -298,6 +440,6 @@ export function DailyServicesForm({ date, operations, onSelectionChange, selecte
                     )}
                 </CardContent>
             </Card>
-        </div>
+        </div >
     )
 }
