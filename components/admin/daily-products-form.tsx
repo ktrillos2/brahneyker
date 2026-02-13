@@ -73,11 +73,17 @@ export function DailyProductsForm({ date, products, sales, onSelectionChange, se
 
         setIsSubmitting(true)
         try {
-            await addDailyProductSale({
+            const result = await addDailyProductSale({
                 productId,
                 quantity: parseInt(quantity),
                 date,
             })
+
+            if (result && !result.success) {
+                toast.error(result.error || "Error al agregar producto")
+                return
+            }
+
             setProductId("")
             setQuantity("1")
             setOpen(false)

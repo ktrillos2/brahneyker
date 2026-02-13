@@ -59,13 +59,19 @@ export function DailyServicesForm({ date, operations, onSelectionChange, selecte
 
         setIsSubmitting(true)
         try {
-            await addDailyOperation({
+            const result = await addDailyOperation({
                 stylist,
                 clientName,
                 description,
                 amount: parseFloat(amount.replace(/\./g, "").replace(/,/g, "")),
                 date,
             })
+
+            if (result && !result.success) {
+                toast.error(result.error || "Error al agregar servicio")
+                return
+            }
+
             setClientName("")
             setDescription("")
             setAmount("")

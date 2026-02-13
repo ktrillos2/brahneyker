@@ -14,12 +14,18 @@ export async function addDailyOperation(data: {
     amount: number
     date: string
 }) {
-    await db.insert(dailyOperations).values({
-        id: crypto.randomUUID(),
-        ...data,
-        status: "pendiente",
-    })
-    revalidatePath("/admin/daily-invoices")
+    try {
+        await db.insert(dailyOperations).values({
+            id: crypto.randomUUID(),
+            ...data,
+            status: "pendiente",
+        })
+        revalidatePath("/admin/daily-invoices")
+        return { success: true }
+    } catch (error) {
+        console.error("Error adding daily operation:", error)
+        return { success: false, error: "Error al registrar servicio. Verifique la conexión o contacte soporte." }
+    }
 }
 
 export async function getDailyOperations(date: string) {
@@ -44,12 +50,18 @@ export async function addDailyProductSale(data: {
     quantity: number
     date: string
 }) {
-    await db.insert(dailyProductSales).values({
-        id: crypto.randomUUID(),
-        ...data,
-        status: "pendiente",
-    })
-    revalidatePath("/admin/daily-invoices")
+    try {
+        await db.insert(dailyProductSales).values({
+            id: crypto.randomUUID(),
+            ...data,
+            status: "pendiente",
+        })
+        revalidatePath("/admin/daily-invoices")
+        return { success: true }
+    } catch (error) {
+        console.error("Error adding daily product sale:", error)
+        return { success: false, error: "Error al registrar venta. Verifique la conexión o contacte soporte." }
+    }
 }
 
 export async function getDailyProductSales(date: string) {
