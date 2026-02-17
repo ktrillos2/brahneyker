@@ -485,6 +485,16 @@ function InventarioContent() {
                 {/* Prices */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
+                    <label className="text-sm font-medium text-foreground mb-2 block">Costo</label>
+                    <input
+                      type="number"
+                      value={formData.cost}
+                      onChange={(e) => setFormData({ ...formData, cost: e.target.value })}
+                      className="w-full bg-input border border-border rounded-lg py-2.5 px-4 text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                      min="0"
+                    />
+                  </div>
+                  <div>
                     <label className="text-sm font-medium text-foreground mb-2 block">Precio de Venta *</label>
                     <input
                       type="number"
@@ -492,16 +502,6 @@ function InventarioContent() {
                       onChange={(e) => setFormData({ ...formData, price: e.target.value })}
                       className="w-full bg-input border border-border rounded-lg py-2.5 px-4 text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                       required
-                      min="0"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-foreground mb-2 block">Costo</label>
-                    <input
-                      type="number"
-                      value={formData.cost}
-                      onChange={(e) => setFormData({ ...formData, cost: e.target.value })}
-                      className="w-full bg-input border border-border rounded-lg py-2.5 px-4 text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                       min="0"
                     />
                   </div>
