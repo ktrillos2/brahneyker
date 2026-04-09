@@ -30,7 +30,7 @@ export const appointments = sqliteTable("appointments", {
     time: text("time").notNull(), // HH:MM
     duration: integer("duration").default(60), // in minutes
     details: text("details").notNull(),
-    stylist: text("stylist").notNull(), // "Damaris" | "Fabiola" | "Karolina" | "Lizday" | "Stella"
+    stylist: text("stylist").notNull(), // "Damaris" | "Fabiola" | "Lizday" | "Stella"
     status: text("status").notNull().default("pendiente"), // "pendiente" | "confirmada" | "completada" | "cancelada"
     clientName: text("client_name"),
     clientPhone: text("client_phone"),
@@ -73,7 +73,7 @@ export const invoiceItems = sqliteTable("invoice_items", {
 export const dailyOperations = sqliteTable("daily_operations", {
     id: text("id").primaryKey(),
     date: text("date").notNull(), // YYYY-MM-DD
-    stylist: text("stylist").notNull(), // "Damaris" | "Fabiola" | "Lizday" | "Stella" | "Karolina"
+    stylist: text("stylist").notNull(), // "Damaris" | "Fabiola" | "Lizday" | "Stella"
     clientName: text("client_name"),
     description: text("description").notNull(),
     amount: real("amount").notNull(),
