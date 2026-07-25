@@ -2,7 +2,7 @@
 
 import { db } from "@/lib/db"
 import { appointments } from "@/lib/schema"
-import { eq, desc } from "drizzle-orm"
+import { eq, desc, and } from "drizzle-orm"
 import { verifySession } from "@/lib/auth"
 import { revalidatePath } from "next/cache"
 
@@ -14,10 +14,35 @@ export async function getAppointments() {
     return await db.select().from(appointments).orderBy(desc(appointments.createdAt))
 }
 
+const timeToMinutes = (time: string) => {
+    const [hours, minutes] = time.split(":").map(Number)
+    return hours * 60 + minutes
+}
+
 export async function createAppointment(data: any) {
     await verifySession()
 
     try {
+        const existingAppointments = await db.select().from(appointments).where(
+            and(
+                eq(appointments.date, data.date),
+                eq(appointments.stylist, data.stylist)
+            )
+        )
+
+        const newStart = timeToMinutes(data.time)
+        const newEnd = newStart + Number(data.duration)
+
+        const isOccupied = existingAppointments.some((a) => {
+            const aptStart = timeToMinutes(a.time)
+            const aptEnd = aptStart + (a.duration || 60)
+            return Math.max(newStart, aptStart) < Math.min(newEnd, aptEnd)
+        })
+
+        if (isOccupied) {
+            return { error: "El horario ya está ocupado" }
+        }
+
         await db.insert(appointments).values({
             id: crypto.randomUUID(),
             date: data.date,
@@ -39,6 +64,27 @@ export async function updateAppointment(id: string, data: any) {
     await verifySession()
 
     try {
+        const existingAppointments = await db.select().from(appointments).where(
+            and(
+                eq(appointments.date, data.date),
+                eq(appointments.stylist, data.stylist)
+            )
+        )
+
+        const newStart = timeToMinutes(data.time)
+        const newEnd = newStart + Number(data.duration)
+
+        const isOccupied = existingAppointments.some((a) => {
+            if (a.id === id) return false
+            const aptStart = timeToMinutes(a.time)
+            const aptEnd = aptStart + (a.duration || 60)
+            return Math.max(newStart, aptStart) < Math.min(newEnd, aptEnd)
+        })
+
+        if (isOccupied) {
+            return { error: "El horario ya está ocupado" }
+        }
+
         await db.update(appointments).set({
             date: data.date,
             time: data.time,

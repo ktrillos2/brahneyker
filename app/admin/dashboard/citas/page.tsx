@@ -107,10 +107,6 @@ export default function CitasPage() {
     stylist: "Damaris" as "Damaris" | "Fabiola" | "Tatiana" | "Lizday" | "Stella",
   })
 
-  useEffect(() => {
-    fetchAppointments()
-  }, [])
-
   const fetchAppointments = async () => {
     try {
       const data = await getAppointments()
@@ -120,6 +116,28 @@ export default function CitasPage() {
       console.error("Error fetching appointments:", error)
     }
   }
+
+  useEffect(() => {
+    fetchAppointments()
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        fetchAppointments()
+      }
+    }
+
+    // Polling every 15 seconds to keep the view updated
+    const intervalId = setInterval(() => {
+      fetchAppointments()
+    }, 15000)
+
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
+      clearInterval(intervalId)
+    }
+  }, [])
 
   const showNotification = (message: string, type: "success" | "error") => {
     setNotification({ message, type })
@@ -216,10 +234,18 @@ export default function CitasPage() {
 
     try {
       if (editingAppointment) {
-        await updateAppointment(editingAppointment.id, formData)
+        const result = await updateAppointment(editingAppointment.id, formData)
+        if (result.error) {
+          showNotification(result.error, "error")
+          return
+        }
         showNotification("Cita actualizada", "success")
       } else {
-        await createAppointment(formData)
+        const result = await createAppointment(formData)
+        if (result.error) {
+          showNotification(result.error, "error")
+          return
+        }
         showNotification("Cita agendada", "success")
       }
       setShowModal(false)
@@ -232,7 +258,11 @@ export default function CitasPage() {
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation()
     if (window.confirm("¿Estás seguro de eliminar esta cita?")) {
-      await deleteAppointment(id)
+      const result = await deleteAppointment(id)
+      if (result.error) {
+        showNotification(result.error, "error")
+        return
+      }
       showNotification("Cita eliminada", "success")
       fetchAppointments()
       setShowModal(false)
