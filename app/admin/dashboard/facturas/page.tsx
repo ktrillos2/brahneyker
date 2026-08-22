@@ -28,6 +28,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
+import { TotpGuard } from "@/components/admin/totp-guard"
 
 interface Product {
   id: string
@@ -77,6 +78,8 @@ function FacturasContent() {
   const [barcodeInput, setBarcodeInput] = useState("")
   const [customerName, setCustomerName] = useState("")
   const [customerPhone, setCustomerPhone] = useState("")
+  // TOTP guard state for generating invoices
+  const [totpOpen, setTotpOpen] = useState(false)
   const searchParams = useSearchParams()
   const initialView = searchParams.get('view') as 'new' | 'general_history' | 'daily_history' | null
   const [viewMode, setViewMode] = useState<'new' | 'general_history' | 'daily_history'>(initialView || 'new')
@@ -523,11 +526,18 @@ function FacturasContent() {
   const tax = 0
   const total = subtotal + tax
 
-  const handleGenerateInvoice = async () => {
+  // Step 1: Validate and open TOTP guard before generating invoice
+  const handleGenerateInvoice = () => {
     if (currentItems.length === 0) {
       showNotification("Agregue productos a la factura", "error")
       return
     }
+    setTotpOpen(true)
+  }
+
+  // Step 2: Called after TOTP is verified — actually creates the invoice
+  const handleConfirmedGenerateInvoice = async () => {
+    setTotpOpen(false)
 
     // Create invoice object payload
     const invoicePayload = {
@@ -758,6 +768,17 @@ function FacturasContent() {
 
   return (
     <div className="space-y-6">
+      {/* TOTP Guard — acción: generar factura */}
+      <TotpGuard
+        guardKey="facturas-generar"
+        mode="action"
+        open={totpOpen}
+        title="Confirmar Generación de Factura"
+        description="Ingresa el código de tu app autenticadora para generar la factura"
+        onVerified={handleConfirmedGenerateInvoice}
+        onCancel={() => setTotpOpen(false)}
+      />
+
       {/* Notification */}
       {notification && (
         <div

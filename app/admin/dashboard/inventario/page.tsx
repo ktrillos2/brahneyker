@@ -6,6 +6,7 @@ import { useState, useEffect } from "react"
 import { Plus, Search, Edit2, Trash2, X, Package, AlertTriangle, Minus, AlertCircle, ChevronLeft, ChevronRight, ChevronDown } from "lucide-react"
 import { getProducts, createProduct, updateProduct, deleteProduct, getCategories } from "../../../actions/inventory"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { TotpGuard } from "@/components/admin/totp-guard"
 
 interface Product {
   id: string
@@ -560,9 +561,16 @@ function InventarioContent() {
 
 export default function InventoryPage() {
   return (
-    <Suspense fallback={<div className="p-8 text-center">Cargando...</div>}>
-      <InventarioContent />
-    </Suspense>
+    <TotpGuard
+      guardKey="inventario"
+      mode="page"
+      title="Acceso al Inventario"
+      description="Ingresa el código de 6 dígitos de tu app autenticadora para ver los productos"
+    >
+      <Suspense fallback={<div className="p-8 text-center">Cargando...</div>}>
+        <InventarioContent />
+      </Suspense>
+    </TotpGuard>
   )
 }
 
