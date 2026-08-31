@@ -1,7 +1,7 @@
 "use server"
 
 import { db } from "@/lib/db"
-import { products } from "@/lib/schema"
+import { products, invoiceItems, dailyProductSales } from "@/lib/schema"
 import { eq, desc, like, or, sql } from "drizzle-orm"
 import { verifySession } from "@/lib/auth"
 import { revalidatePath } from "next/cache"
@@ -110,8 +110,24 @@ export async function deleteProduct(id: string) {
     await verifySession()
 
     try {
-        await db.delete(products).where(eq(products.id, id))
+        await db.transaction(async (tx) => {
+            // 1. Unlink product from historical invoice items so past invoices preserve names and prices
+            await tx.update(invoiceItems)
+                .set({ productId: null })
+                .where(eq(invoiceItems.productId, id))
+
+            // 2. Remove daily product sales associated with this product
+            await tx.delete(dailyProductSales)
+                .where(eq(dailyProductSales.productId, id))
+
+            // 3. Delete the product from the catalog
+            await tx.delete(products)
+                .where(eq(products.id, id))
+        })
+
         revalidatePath("/admin/dashboard/inventario")
+        revalidatePath("/admin/dashboard/facturas")
+        revalidatePath("/admin/dashboard/daily-invoices")
         return { success: true }
     } catch (error) {
         console.error("Delete product error:", error)

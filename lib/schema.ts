@@ -63,7 +63,7 @@ export const invoices = sqliteTable("invoices", {
 export const invoiceItems = sqliteTable("invoice_items", {
     id: text("id").primaryKey(),
     invoiceId: text("invoice_id").notNull().references(() => invoices.id, { onDelete: 'cascade' }),
-    productId: text("product_id").references(() => products.id),
+    productId: text("product_id").references(() => products.id, { onDelete: 'set null' }),
     productName: text("product_name").notNull(),
     quantity: integer("quantity").notNull(),
     price: real("price").notNull(),
@@ -78,7 +78,7 @@ export const dailyOperations = sqliteTable("daily_operations", {
     description: text("description").notNull(),
     amount: real("amount").notNull(),
     status: text("status").notNull().default("pendiente"), // "pendiente" | "facturada"
-    invoiceId: text("invoice_id").references(() => invoices.id),
+    invoiceId: text("invoice_id").references(() => invoices.id, { onDelete: 'set null' }),
     createdAt: text("created_at").default(sql`(CURRENT_TIMESTAMP)`),
 })
 
@@ -86,10 +86,10 @@ export const dailyOperations = sqliteTable("daily_operations", {
 export const dailyProductSales = sqliteTable("daily_product_sales", {
     id: text("id").primaryKey(),
     date: text("date").notNull(), // YYYY-MM-DD
-    productId: text("product_id").notNull().references(() => products.id),
+    productId: text("product_id").notNull().references(() => products.id, { onDelete: 'cascade' }),
     quantity: integer("quantity").notNull(),
     status: text("status").notNull().default("pendiente"), // "pendiente" | "facturada"
-    invoiceId: text("invoice_id").references(() => invoices.id),
+    invoiceId: text("invoice_id").references(() => invoices.id, { onDelete: 'set null' }),
     createdAt: text("created_at").default(sql`(CURRENT_TIMESTAMP)`),
 })
 

@@ -77,6 +77,7 @@ function InventarioContent() {
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const [formData, setFormData] = useState({
     name: "",
@@ -157,7 +158,6 @@ function InventarioContent() {
 
   const handleCloseModal = () => {
     setIsModalOpen(false)
-    setIsModalOpen(false)
     setEditingProduct(null)
   }
 
@@ -195,13 +195,28 @@ function InventarioContent() {
   }
 
   const handleDelete = async (id: string) => {
-    if (confirm("¿Está seguro de eliminar este producto?")) {
-      try {
-        await deleteProduct(id)
-        fetchProducts()
-      } catch (error) {
-        console.error("Error deleting product:", error)
+    if (!confirm("¿Está seguro de eliminar este producto?")) return
+
+    try {
+      setDeletingId(id)
+      const result = await deleteProduct(id)
+      if (result?.error) {
+        alert(result.error)
+        return
       }
+
+      // If current page is > 1 and this was the only item on the page, go back one page
+      if (products.length === 1 && currentPage > 1) {
+        setCurrentPage((prev) => Math.max(1, prev - 1))
+      } else {
+        await fetchProducts()
+      }
+      fetchCategories()
+    } catch (error) {
+      console.error("Error deleting product:", error)
+      alert("Ocurrió un error inesperado al eliminar el producto")
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -358,11 +373,19 @@ function InventarioContent() {
                     <td className="p-4 text-right">
                       <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
                         <button
-                          onClick={() => handleDelete(product.id)}
-                          className="p-2 hover:bg-muted rounded-lg text-red-500 transition-colors"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleDelete(product.id)
+                          }}
+                          disabled={deletingId === product.id}
+                          className="p-2 hover:bg-muted rounded-lg text-red-500 hover:text-red-700 disabled:opacity-50 transition-colors"
                           title="Eliminar"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          {deletingId === product.id ? (
+                            <div className="w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <Trash2 className="w-4 h-4" />
+                          )}
                         </button>
                       </div>
                     </td>
