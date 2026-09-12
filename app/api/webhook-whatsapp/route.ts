@@ -8,7 +8,7 @@ import * as chrono from 'chrono-node'
 const GATEWAY_URL = "http://3.21.167.162:3000/send-message"
 const GATEWAY_SECRET = "KYT_SECRET_2026"
 
-const STYLISTS = ['Damaris', 'Fabiola', 'Tatiana', 'Lizday', 'Stella']
+const STYLISTS = ['Damaris', 'Fabiola', 'Tatiana', 'Lizday', 'Stella', 'Anyeli']
 const SERVICES = {
     'acrilico': 'Acrílico',
     'acrílico': 'Acrílico',
@@ -413,6 +413,7 @@ export async function POST(req: Request) {
         if (cleanText === '3' || cleanText.includes('tatiana')) firstReq.stylist = 'Tatiana'
         if (cleanText === '4' || cleanText.includes('lizday')) firstReq.stylist = 'Lizday'
         if (cleanText === '5' || cleanText.includes('stella')) firstReq.stylist = 'Stella'
+        if (cleanText === '6' || cleanText.includes('anyeli')) firstReq.stylist = 'Anyeli'
         if (cleanText === 'a') firstReq.service = 'Polygel'
         if (cleanText === 'b') firstReq.service = 'Semipermanente'
         if (cleanText === 'c') firstReq.service = 'Tradicional'
@@ -434,7 +435,7 @@ export async function POST(req: Request) {
         // Validation - Stylist
         if (!candidateRequests.every((r: any) => r.stylist)) {
             await updateState(phone, 'SELECT_STYLIST', { requests: candidateRequests, targetDate })
-            await sendToGateway(phone, `👩‍🦰 ¿Con quién te gustaría agendar?\n\n1. Damaris\n2. Fabiola\n3. Tatiana\n4. Lizday\n5. Stella`)
+            await sendToGateway(phone, `👩‍🦰 ¿Con quién te gustaría agendar?\n\n1. Damaris\n2. Fabiola\n3. Tatiana\n4. Lizday\n5. Stella\n6. Anyeli`)
             return NextResponse.json({ status: "ask_stylist" })
         }
 

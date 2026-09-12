@@ -19,13 +19,15 @@ import {
 } from "@/components/ui/select"
 import { getAppointments, createAppointment, updateAppointment, deleteAppointment } from "../../../actions/appointments"
 
+export type StylistName = "Damaris" | "Fabiola" | "Tatiana" | "Lizday" | "Stella" | "Anyeli"
+
 interface Appointment {
   id: string
   date: string
   time: string
   duration: number
   details: string
-  stylist: "Damaris" | "Fabiola" | "Tatiana" | "Lizday" | "Stella"
+  stylist: StylistName
   status: "pendiente" | "confirmada" | "completada" | "cancelada"
 }
 
@@ -50,7 +52,7 @@ const generateTimeSlots = (startHour: number, endHour: number, intervalMinutes: 
 
 const modalTimeSlots = generateTimeSlots(8, 19, 15)
 
-const stylists = ["Damaris", "Fabiola", "Tatiana", "Lizday", "Stella"] as const
+const stylists = ["Damaris", "Fabiola", "Tatiana", "Lizday", "Stella", "Anyeli"] as const
 
 const statusColors = {
   pendiente: "bg-yellow-500/10 text-yellow-500 border-l-2 border-yellow-500",
@@ -104,7 +106,7 @@ export default function CitasPage() {
     time: "",
     duration: 60,
     details: "",
-    stylist: "Damaris" as "Damaris" | "Fabiola" | "Tatiana" | "Lizday" | "Stella",
+    stylist: "Damaris" as StylistName,
   })
 
   const fetchAppointments = async () => {
@@ -178,7 +180,7 @@ export default function CitasPage() {
   const handleOpenModal = (
     date?: Date,
     time?: string,
-    stylist?: "Damaris" | "Fabiola" | "Tatiana" | "Lizday" | "Stella",
+    stylist?: StylistName,
     appointment?: Appointment
   ) => {
     if (appointment) {
@@ -188,7 +190,7 @@ export default function CitasPage() {
         time: appointment.time,
         duration: appointment.duration || 60,
         details: appointment.details,
-        stylist: appointment.stylist as "Damaris" | "Fabiola" | "Tatiana" | "Lizday" | "Stella",
+        stylist: appointment.stylist as StylistName,
       })
     } else {
       setEditingAppointment(null)
@@ -450,15 +452,15 @@ export default function CitasPage() {
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               {/* Stylist */}
               <div>
-                <label className="text-sm font-medium text-foreground mb-2 block">Usuario *</label>
-                <div className="flex gap-2">
+                <label className="text-sm font-medium text-foreground mb-2 block">Usuario / Especialista *</label>
+                <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
                   {stylists.map(s => (
                     <button
                       type="button"
                       key={s}
                       onClick={() => setFormData({ ...formData, stylist: s })}
-                      className={`flex-1 py-2.5 rounded-lg border font-medium transition-all ${formData.stylist === s
-                        ? 'bg-primary text-primary-foreground border-primary'
+                      className={`py-2 px-1 text-center rounded-lg border font-medium text-xs sm:text-sm transition-all truncate ${formData.stylist === s
+                        ? 'bg-primary text-primary-foreground border-primary shadow-xs'
                         : 'bg-card text-foreground border-border hover:bg-muted'
                         }`}
                     >

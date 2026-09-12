@@ -15,13 +15,19 @@ export async function addDailyOperation(data: {
     date: string
 }) {
     try {
-        await db.insert(dailyOperations).values({
+        const newRecord = {
             id: crypto.randomUUID(),
-            ...data,
+            stylist: data.stylist,
+            clientName: data.clientName?.trim() || null,
+            description: data.description.trim(),
+            amount: data.amount,
+            date: data.date,
             status: "pendiente",
-        })
+        }
+        await db.insert(dailyOperations).values(newRecord)
+        revalidatePath("/admin/dashboard/daily-invoices")
         revalidatePath("/admin/daily-invoices")
-        return { success: true }
+        return { success: true, operation: newRecord }
     } catch (error) {
         console.error("Error adding daily operation:", error)
         return { success: false, error: "Error al registrar servicio. Verifique la conexión o contacte soporte." }
@@ -34,12 +40,14 @@ export async function getDailyOperations(date: string) {
 
 export async function deleteDailyOperation(id: string) {
     await db.delete(dailyOperations).where(eq(dailyOperations.id, id))
+    revalidatePath("/admin/dashboard/daily-invoices")
     revalidatePath("/admin/daily-invoices")
 }
 
 export async function deleteDailyOperations(ids: string[]) {
     if (ids.length === 0) return
     await db.delete(dailyOperations).where(inArray(dailyOperations.id, ids))
+    revalidatePath("/admin/dashboard/daily-invoices")
     revalidatePath("/admin/daily-invoices")
 }
 
@@ -53,6 +61,7 @@ export async function updateDailyOperation(id: string, data: {
         await db.update(dailyOperations)
             .set(data)
             .where(eq(dailyOperations.id, id))
+        revalidatePath("/admin/dashboard/daily-invoices")
         revalidatePath("/admin/daily-invoices")
         return { success: true }
     } catch (error) {
@@ -74,6 +83,7 @@ export async function addDailyProductSale(data: {
             ...data,
             status: "pendiente",
         })
+        revalidatePath("/admin/dashboard/daily-invoices")
         revalidatePath("/admin/daily-invoices")
         return { success: true }
     } catch (error) {
@@ -101,12 +111,14 @@ export async function getDailyProductSales(date: string) {
 
 export async function deleteDailyProductSale(id: string) {
     await db.delete(dailyProductSales).where(eq(dailyProductSales.id, id))
+    revalidatePath("/admin/dashboard/daily-invoices")
     revalidatePath("/admin/daily-invoices")
 }
 
 export async function deleteDailyProductSales(ids: string[]) {
     if (ids.length === 0) return
     await db.delete(dailyProductSales).where(inArray(dailyProductSales.id, ids))
+    revalidatePath("/admin/dashboard/daily-invoices")
     revalidatePath("/admin/daily-invoices")
 }
 
@@ -210,6 +222,7 @@ export async function generateInvoiceFromDaily(
         }
     }
 
+    revalidatePath("/admin/dashboard/daily-invoices")
     revalidatePath("/admin/daily-invoices")
     revalidatePath("/admin/dashboard/facturas")
 

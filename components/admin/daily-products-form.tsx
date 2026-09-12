@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { addDailyProductSale, deleteDailyProductSale } from "@/app/actions/daily-operations"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -62,6 +63,7 @@ interface DailyProductsFormProps {
 }
 
 export function DailyProductsForm({ date, products, sales, onSelectionChange, selectedIds }: DailyProductsFormProps) {
+    const router = useRouter()
     const [productId, setProductId] = useState<string>("")
     const [quantity, setQuantity] = useState("1")
     const [isSubmitting, setIsSubmitting] = useState(false)
@@ -88,6 +90,7 @@ export function DailyProductsForm({ date, products, sales, onSelectionChange, se
             setQuantity("1")
             setOpen(false)
             toast.success("Producto agregado")
+            router.refresh()
         } catch (error) {
             toast.error("Error al agregar producto")
         } finally {
@@ -99,6 +102,7 @@ export function DailyProductsForm({ date, products, sales, onSelectionChange, se
         try {
             await deleteDailyProductSale(id)
             toast.success("Venta eliminada")
+            router.refresh()
         } catch (error) {
             toast.error("Error al eliminar")
         }
