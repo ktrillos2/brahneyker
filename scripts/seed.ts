@@ -6,8 +6,8 @@ import { eq } from "drizzle-orm"
 async function main() {
     console.log("Seeding database...")
 
-    const username = "ruthsu87"
-    const passwordRaw = "60390777"
+    const username = process.env.ADMIN_USERNAME || "ruthsu87"
+    const passwordRaw = process.env.ADMIN_PASSWORD || "242203"
     const passwordHash = await hash(passwordRaw, 10)
 
     // Check if admin exists
