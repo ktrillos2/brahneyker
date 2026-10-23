@@ -106,10 +106,38 @@ export async function updateProduct(id: string, data: any) {
     }
 }
 
+// Older databases were created before migration 0001, where invoice_items.product_id
+// is still NOT NULL. Unlinking a product from past invoices then fails, so rebuild the
+// table with a nullable product_id (same data, same columns) before deleting.
+async function ensureInvoiceItemsProductIdNullable() {
+    const columns = await db.all<{ name: string; notnull: number }>(sql`PRAGMA table_info(invoice_items)`)
+    const productIdColumn = columns.find((c) => c.name === "product_id")
+    if (!productIdColumn || !productIdColumn.notnull) return
+
+    await db.batch([
+        db.run(sql`DROP TABLE IF EXISTS __new_invoice_items`),
+        db.run(sql.raw(`CREATE TABLE __new_invoice_items (
+            id text PRIMARY KEY NOT NULL,
+            invoice_id text NOT NULL,
+            product_id text,
+            product_name text NOT NULL,
+            quantity integer NOT NULL,
+            price real NOT NULL,
+            FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON UPDATE no action ON DELETE cascade,
+            FOREIGN KEY (product_id) REFERENCES products(id) ON UPDATE no action ON DELETE set null
+        )`)),
+        db.run(sql`INSERT INTO __new_invoice_items (id, invoice_id, product_id, product_name, quantity, price) SELECT id, invoice_id, product_id, product_name, quantity, price FROM invoice_items`),
+        db.run(sql`DROP TABLE invoice_items`),
+        db.run(sql`ALTER TABLE __new_invoice_items RENAME TO invoice_items`),
+    ])
+}
+
 export async function deleteProduct(id: string) {
     await verifySession()
 
     try {
+        await ensureInvoiceItemsProductIdNullable()
+
         await db.transaction(async (tx) => {
             // 1. Unlink product from historical invoice items so past invoices preserve names and prices
             await tx.update(invoiceItems)
@@ -131,7 +159,8 @@ export async function deleteProduct(id: string) {
         return { success: true }
     } catch (error) {
         console.error("Delete product error:", error)
-        return { error: "Error al eliminar producto" }
+        const detail = error instanceof Error ? (error.cause instanceof Error ? error.cause.message : error.message) : ""
+        return { error: detail ? `Error al eliminar producto: ${detail}` : "Error al eliminar producto" }
     }
 }
 
