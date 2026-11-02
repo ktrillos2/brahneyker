@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/select"
 import { getAppointments, createAppointment, updateAppointment, deleteAppointment } from "../../../actions/appointments"
 
-export type StylistName = "Damaris" | "Fabiola" | "Tatiana" | "Lizday" | "Stella" | "Anyeli"
+export type StylistName = "Damaris" | "Fabiola" | "Stefanny" | "Lizday" | "Stella" | "Anyeli"
 
 interface Appointment {
   id: string
@@ -52,7 +52,7 @@ const generateTimeSlots = (startHour: number, endHour: number, intervalMinutes: 
 
 const modalTimeSlots = generateTimeSlots(8, 19, 15)
 
-const stylists = ["Damaris", "Fabiola", "Tatiana", "Lizday", "Stella", "Anyeli"] as const
+const stylists = ["Damaris", "Fabiola", "Stefanny", "Lizday", "Stella", "Anyeli"] as const
 
 const statusColors = {
   pendiente: "bg-yellow-500/10 text-yellow-500 border-l-2 border-yellow-500",

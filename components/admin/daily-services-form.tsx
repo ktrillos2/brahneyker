@@ -37,7 +37,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog"
 
-const STYLISTS = ["Damaris", "Fabiola", "Tatiana", "Lizday", "Stella", "Anyeli"]
+const STYLISTS = ["Damaris", "Fabiola", "Stefanny", "Lizday", "Stella", "Anyeli"]
 
 interface DailyOperation {
     id: string
