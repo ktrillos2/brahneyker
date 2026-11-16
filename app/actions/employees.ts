@@ -1,7 +1,7 @@
 "use server"
 
 import { db } from "@/lib/db"
-import { employees } from "@/lib/schema"
+import { appointments, dailyOperations, employees } from "@/lib/schema"
 import { eq, sql } from "drizzle-orm"
 import { verifySession } from "@/lib/auth"
 import { revalidatePath } from "next/cache"
@@ -42,6 +42,32 @@ export async function createEmployee(rawName: string) {
     } catch (error) {
         console.error("Create employee error:", error)
         return { error: "Error al crear empleada" }
+    }
+}
+
+// Renaming keeps the person's history: past appointments and services move to the new name.
+export async function renameEmployee(id: string, rawName: string) {
+    await verifySession()
+    const name = rawName.trim()
+    if (!name) return { error: "Escribe el nombre de la empleada" }
+
+    try {
+        await ensureEmployeesTable()
+        const current = await db.select().from(employees).where(eq(employees.id, id)).get()
+        if (!current) return { error: "Empleada no encontrada" }
+        if (current.name === name) return { success: true }
+        if (await nameTaken(name, id)) return { error: "Ya existe una empleada con ese nombre" }
+
+        await db.batch([
+            db.update(employees).set({ name }).where(eq(employees.id, id)),
+            db.update(appointments).set({ stylist: name }).where(eq(appointments.stylist, current.name)),
+            db.update(dailyOperations).set({ stylist: name }).where(eq(dailyOperations.stylist, current.name)),
+        ])
+        revalidateEmployeeViews()
+        return { success: true }
+    } catch (error) {
+        console.error("Rename employee error:", error)
+        return { error: "Error al cambiar el nombre" }
     }
 }
 

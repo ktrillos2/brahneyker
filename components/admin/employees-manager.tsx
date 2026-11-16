@@ -2,10 +2,10 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react"
+import { ArrowDown, ArrowUp, Check, Pencil, Plus, Trash2, X } from "lucide-react"
 import { toast } from "sonner"
 
-import { createEmployee, deleteEmployee, moveEmployee } from "@/app/actions/employees"
+import { createEmployee, deleteEmployee, moveEmployee, renameEmployee } from "@/app/actions/employees"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
@@ -17,6 +17,8 @@ interface Employee {
 export function EmployeesManager({ employees }: { employees: Employee[] }) {
     const router = useRouter()
     const [newName, setNewName] = useState("")
+    const [editingId, setEditingId] = useState<string | null>(null)
+    const [editName, setEditName] = useState("")
     const [busy, setBusy] = useState(false)
 
     const run = async (action: () => Promise<{ error?: string; success?: boolean }>, successMessage?: string) => {
@@ -42,6 +44,10 @@ export function EmployeesManager({ employees }: { employees: Employee[] }) {
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault()
         if (await run(() => createEmployee(newName), "Empleada agregada")) setNewName("")
+    }
+
+    const handleRename = async (id: string) => {
+        if (await run(() => renameEmployee(id, editName), "Nombre actualizado")) setEditingId(null)
     }
 
     const handleDelete = async (employee: Employee) => {
@@ -97,23 +103,55 @@ export function EmployeesManager({ employees }: { employees: Employee[] }) {
                             </button>
                         </div>
 
-                        <span className="flex-1 font-medium">{employee.name}</span>
-                        <button
-                            type="button"
-                            onClick={() => handleDelete(employee)}
-                            disabled={busy}
-                            className="p-2 rounded-lg hover:bg-muted text-red-500 hover:text-red-700"
-                            title="Eliminar"
-                        >
-                            <Trash2 className="h-4 w-4" />
-                        </button>
+                        {editingId === employee.id ? (
+                            <form
+                                className="flex flex-1 gap-2"
+                                onSubmit={(e) => {
+                                    e.preventDefault()
+                                    handleRename(employee.id)
+                                }}
+                            >
+                                <Input value={editName} onChange={(e) => setEditName(e.target.value)} autoFocus disabled={busy} />
+                                <Button type="submit" size="icon" disabled={busy || !editName.trim()} title="Guardar">
+                                    <Check className="h-4 w-4" />
+                                </Button>
+                                <Button type="button" size="icon" variant="outline" onClick={() => setEditingId(null)} title="Cancelar">
+                                    <X className="h-4 w-4" />
+                                </Button>
+                            </form>
+                        ) : (
+                            <>
+                                <span className="flex-1 font-medium">{employee.name}</span>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setEditingId(employee.id)
+                                        setEditName(employee.name)
+                                    }}
+                                    className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground"
+                                    title="Cambiar nombre"
+                                >
+                                    <Pencil className="h-4 w-4" />
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => handleDelete(employee)}
+                                    disabled={busy}
+                                    className="p-2 rounded-lg hover:bg-muted text-red-500 hover:text-red-700"
+                                    title="Eliminar"
+                                >
+                                    <Trash2 className="h-4 w-4" />
+                                </button>
+                            </>
+                        )}
                     </div>
                 ))}
             </div>
 
-            <p className="text-sm text-muted-foreground">
-                Al eliminar una empleada, sus servicios y citas anteriores se conservan con su nombre en los ingresos y facturas.
-            </p>
+            <div className="text-sm text-muted-foreground space-y-1">
+                <p><strong>Cambiar nombre</strong> corrige el nombre de la misma persona: sus citas y servicios anteriores quedan con el nombre nuevo.</p>
+                <p><strong>Eliminar</strong> la quita de la lista; sus servicios y citas anteriores se conservan con su nombre en los ingresos y facturas.</p>
+            </div>
         </div>
     )
 }
