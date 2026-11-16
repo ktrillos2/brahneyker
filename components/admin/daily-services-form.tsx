@@ -37,8 +37,6 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog"
 
-const STYLISTS = ["Damaris", "Fabiola", "Stefanny", "Lizday", "Stella", "Anyeli"]
-
 interface DailyOperation {
     id: string
     stylist: string
@@ -53,9 +51,10 @@ interface DailyServicesFormProps {
     operations: DailyOperation[]
     onSelectionChange: (ids: string[]) => void
     selectedIds: string[]
+    stylists: string[]
 }
 
-export function DailyServicesForm({ date, operations, onSelectionChange, selectedIds }: DailyServicesFormProps) {
+export function DailyServicesForm({ date, operations, onSelectionChange, selectedIds, stylists }: DailyServicesFormProps) {
     const router = useRouter()
 
     // Local reactive operations state for immediate optimistic updates
@@ -328,7 +327,7 @@ export function DailyServicesForm({ date, operations, onSelectionChange, selecte
                                     <SelectValue placeholder="Seleccionar" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {STYLISTS.map(s => (
+                                    {stylists.map(s => (
                                         <SelectItem key={s} value={s}>{s}</SelectItem>
                                     ))}
                                 </SelectContent>
@@ -392,7 +391,7 @@ export function DailyServicesForm({ date, operations, onSelectionChange, selecte
                                         <SelectValue placeholder="Seleccionar" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {STYLISTS.map(s => (
+                                        {(stylists.includes(editStylist) || !editStylist ? stylists : [...stylists, editStylist]).map(s => (
                                             <SelectItem key={s} value={s}>{s}</SelectItem>
                                         ))}
                                     </SelectContent>

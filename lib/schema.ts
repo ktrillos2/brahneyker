@@ -30,7 +30,7 @@ export const appointments = sqliteTable("appointments", {
     time: text("time").notNull(), // HH:MM
     duration: integer("duration").default(60), // in minutes
     details: text("details").notNull(),
-    stylist: text("stylist").notNull(), // "Damaris" | "Fabiola" | "Stefanny" | "Lizday" | "Stella" | "Anyeli"
+    stylist: text("stylist").notNull(), // employees.name
     status: text("status").notNull().default("pendiente"), // "pendiente" | "confirmada" | "completada" | "cancelada"
     clientName: text("client_name"),
     clientPhone: text("client_phone"),
@@ -73,7 +73,7 @@ export const invoiceItems = sqliteTable("invoice_items", {
 export const dailyOperations = sqliteTable("daily_operations", {
     id: text("id").primaryKey(),
     date: text("date").notNull(), // YYYY-MM-DD
-    stylist: text("stylist").notNull(), // "Damaris" | "Fabiola" | "Stefanny" | "Lizday" | "Stella" | "Anyeli"
+    stylist: text("stylist").notNull(), // employees.name
     clientName: text("client_name"),
     description: text("description").notNull(),
     amount: real("amount").notNull(),
@@ -93,3 +93,12 @@ export const dailyProductSales = sqliteTable("daily_product_sales", {
     createdAt: text("created_at").default(sql`(CURRENT_TIMESTAMP)`),
 })
 
+
+// Employees Table (stylists shown in calendar, daily billing, income and WhatsApp bot)
+export const employees = sqliteTable("employees", {
+    id: text("id").primaryKey(),
+    name: text("name").notNull().unique(),
+    active: integer("active", { mode: "boolean" }).notNull().default(true),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: text("created_at").default(sql`(CURRENT_TIMESTAMP)`),
+})

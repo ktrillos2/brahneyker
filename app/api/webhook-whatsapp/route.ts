@@ -2,13 +2,13 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { appointments, conversationState } from '@/lib/schema'
 import { eq, and, not, gte, desc } from 'drizzle-orm'
+import { getActiveEmployeeNames } from '@/lib/employees'
 import * as chrono from 'chrono-node'
 
 // --- Configuration ---
 const GATEWAY_URL = "http://3.21.167.162:3000/send-message"
 const GATEWAY_SECRET = "KYT_SECRET_2026"
 
-const STYLISTS = ['Damaris', 'Fabiola', 'Stefanny', 'Lizday', 'Stella', 'Anyeli']
 const SERVICES = {
     'acrilico': 'Acrílico',
     'acrílico': 'Acrílico',
@@ -102,7 +102,7 @@ async function getKnownName(phone: string) {
 
 // --- Logic Helpers ---
 
-function parseRequest(text: string) {
+function parseRequest(text: string, stylists: string[]) {
     const normalize = text.toLowerCase()
 
     // Intent
@@ -145,13 +145,13 @@ function parseRequest(text: string) {
 
     // Segmentation logic ("y")
     const foundStylistsGlobal: string[] = []
-    STYLISTS.forEach(s => { if (normalize.includes(s.toLowerCase())) foundStylistsGlobal.push(s) })
+    stylists.forEach(s => { if (normalize.includes(s.toLowerCase())) foundStylistsGlobal.push(s) })
 
     if (normalize.includes(" y ") && foundStylistsGlobal.length > 1) {
         const parts = normalize.split(" y ")
         parts.forEach(part => {
             let partStylist = null
-            STYLISTS.forEach(s => { if (part.includes(s.toLowerCase())) partStylist = s })
+            stylists.forEach(s => { if (part.includes(s.toLowerCase())) partStylist = s })
             let partService = null
             Object.keys(SERVICES).forEach(k => {
                 if (part.includes(k)) {
@@ -376,9 +376,10 @@ export async function POST(req: Request) {
         }
 
         // 6. Normal Flow (Parser)
-        const parsed = parseRequest(text)
+        const stylists = await getActiveEmployeeNames()
+        const parsed = parseRequest(text, stylists)
 
-        if (parsed.intent === 'OTHER' || cleanText.includes('otro servicio') || cleanText === '2') {
+        if (parsed.intent === 'OTHER' || cleanText.includes('otro servicio') || (cleanText === '2' && currentStep !== 'SELECT_STYLIST')) {
             await updateState(phone, 'HUMAN_HANDOFF')
             await sendToGateway(phone, "Entendido. Un asesor humano 👩‍💻 te escribirá pronto.")
             return NextResponse.json({ status: "handoff" })
@@ -408,12 +409,10 @@ export async function POST(req: Request) {
 
         if (candidateRequests.length === 0) candidateRequests.push({})
         const firstReq = candidateRequests[0]
-        if (cleanText === '1' || cleanText.includes('damaris')) firstReq.stylist = 'Damaris'
-        if (cleanText === '2' || cleanText.includes('fabiola')) firstReq.stylist = 'Fabiola'
-        if (cleanText === '3' || cleanText.includes('stefan')) firstReq.stylist = 'Stefanny'
-        if (cleanText === '4' || cleanText.includes('lizday')) firstReq.stylist = 'Lizday'
-        if (cleanText === '5' || cleanText.includes('stella')) firstReq.stylist = 'Stella'
-        if (cleanText === '6' || cleanText.includes('anyeli')) firstReq.stylist = 'Anyeli'
+        // Stylist menu: numbers follow the order of the Empleadas section
+        stylists.forEach((s, i) => {
+            if ((currentStep === 'SELECT_STYLIST' && cleanText === String(i + 1)) || cleanText.includes(s.toLowerCase())) firstReq.stylist = s
+        })
         if (cleanText === 'a') firstReq.service = 'Polygel'
         if (cleanText === 'b') firstReq.service = 'Semipermanente'
         if (cleanText === 'c') firstReq.service = 'Tradicional'
@@ -435,7 +434,7 @@ export async function POST(req: Request) {
         // Validation - Stylist
         if (!candidateRequests.every((r: any) => r.stylist)) {
             await updateState(phone, 'SELECT_STYLIST', { requests: candidateRequests, targetDate })
-            await sendToGateway(phone, `👩‍🦰 ¿Con quién te gustaría agendar?\n\n1. Damaris\n2. Fabiola\n3. Stefanny\n4. Lizday\n5. Stella\n6. Anyeli`)
+            await sendToGateway(phone, `👩‍🦰 ¿Con quién te gustaría agendar?\n\n${stylists.map((s, i) => `${i + 1}. ${s}`).join('\n')}`)
             return NextResponse.json({ status: "ask_stylist" })
         }
 

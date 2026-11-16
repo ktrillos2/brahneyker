@@ -4,15 +4,18 @@ import { useState } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import Link from "next/link"
 import { Logo } from "@/components/logo"
-import { Package, FileText, Calendar, LayoutDashboard, LogOut, Menu, Receipt } from "lucide-react"
+import { Package, FileText, Calendar, LayoutDashboard, LogOut, Menu, Receipt, Users, TableProperties } from "lucide-react"
 import { logoutAction } from "../../app/actions/auth"
+import { Toaster } from "@/components/ui/sonner"
 
 const navItems = [
     { href: "/admin/dashboard", label: "Panel Principal", icon: LayoutDashboard },
     { href: "/admin/dashboard/daily-invoices", label: "Facturación Diaria", icon: Receipt },
+    { href: "/admin/dashboard/ingresos", label: "Ingresos", icon: TableProperties },
     { href: "/admin/dashboard/inventario", label: "Inventario", icon: Package },
     { href: "/admin/dashboard/facturas", label: "Facturas", icon: FileText },
     { href: "/admin/dashboard/citas", label: "Agenda de Citas", icon: Calendar },
+    { href: "/admin/dashboard/empleadas", label: "Empleadas", icon: Users },
 ]
 
 export default function DashboardShell({ children }: { children: React.ReactNode }) {
@@ -28,6 +31,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
 
     return (
         <div className="min-h-screen bg-background flex">
+            <Toaster richColors position="top-center" />
             {/* Mobile Overlay */}
             {sidebarOpen && (
                 <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />
@@ -78,7 +82,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
             </aside>
 
             {/* Main Content */}
-            <div className="flex-1 flex flex-col min-h-screen">
+            <div className="flex-1 flex flex-col min-h-screen min-w-0">
                 {/* Top Bar */}
                 <header className="sticky top-0 z-30 bg-card/80 backdrop-blur-sm border-b border-border px-4 py-3 lg:px-6">
                     <div className="flex items-center justify-between">

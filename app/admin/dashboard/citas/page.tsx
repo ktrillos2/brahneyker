@@ -18,8 +18,10 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { getAppointments, createAppointment, updateAppointment, deleteAppointment } from "../../../actions/appointments"
+import { getEmployees } from "../../../actions/employees"
 
-export type StylistName = "Damaris" | "Fabiola" | "Stefanny" | "Lizday" | "Stella" | "Anyeli"
+// Stylist names come from the Empleadas section
+export type StylistName = string
 
 interface Appointment {
   id: string
@@ -52,8 +54,6 @@ const generateTimeSlots = (startHour: number, endHour: number, intervalMinutes: 
 
 const modalTimeSlots = generateTimeSlots(8, 19, 15)
 
-const stylists = ["Damaris", "Fabiola", "Stefanny", "Lizday", "Stella", "Anyeli"] as const
-
 const statusColors = {
   pendiente: "bg-yellow-500/10 text-yellow-500 border-l-2 border-yellow-500",
   confirmada: "bg-blue-500/10 text-blue-500 border-l-2 border-blue-500",
@@ -75,6 +75,13 @@ const timeToMinutes = (time: string) => {
 
 export default function CitasPage() {
   const [appointments, setAppointments] = useState<Appointment[]>([])
+  const [stylists, setStylists] = useState<string[]>([])
+
+  useEffect(() => {
+    getEmployees(true)
+      .then((list) => setStylists(list.map((e) => e.name)))
+      .catch((error) => console.error("Error fetching employees:", error))
+  }, [])
 
   // Start of the current week view (Monday)
   const [weekStart, setWeekStart] = useState(() => {
@@ -106,7 +113,7 @@ export default function CitasPage() {
     time: "",
     duration: 60,
     details: "",
-    stylist: "Damaris" as StylistName,
+    stylist: "" as StylistName,
   })
 
   const fetchAppointments = async () => {
@@ -206,7 +213,7 @@ export default function CitasPage() {
         time: time || "",
         duration: 60,
         details: "",
-        stylist: stylist || "Damaris",
+        stylist: stylist || stylists[0] || "",
       })
     }
     setShowModal(true)
@@ -219,6 +226,11 @@ export default function CitasPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    if (!formData.stylist) {
+      showNotification("Selecciona una especialista.", "error")
+      return
+    }
 
     // Check availability
     const isOccupied = appointments.some(
@@ -454,7 +466,7 @@ export default function CitasPage() {
               <div>
                 <label className="text-sm font-medium text-foreground mb-2 block">Usuario / Especialista *</label>
                 <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-                  {stylists.map(s => (
+                  {(stylists.includes(formData.stylist) || !formData.stylist ? stylists : [...stylists, formData.stylist]).map(s => (
                     <button
                       type="button"
                       key={s}

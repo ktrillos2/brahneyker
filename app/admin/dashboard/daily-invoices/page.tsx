@@ -3,6 +3,8 @@ import { getDailyOperations, getDailyProductSales, getWeeklyRecords } from "@/ap
 import { db } from "@/lib/db"
 import { products } from "@/lib/schema"
 import { DailyOperations } from "@/components/admin/daily-operations"
+import { getActiveEmployeeNames } from "@/lib/employees"
+import { todayInBogota } from "@/lib/dates"
 import { addDays, format, parseISO, startOfWeek } from "date-fns"
 
 export const dynamic = 'force-dynamic'
@@ -13,18 +15,19 @@ interface PageProps {
 
 export default async function DailyInvoicesPage(props: PageProps) {
     const searchParams = await props.searchParams;
-    const date = typeof searchParams.date === 'string' ? searchParams.date : format(new Date(), 'yyyy-MM-dd')
+    const date = typeof searchParams.date === 'string' ? searchParams.date : todayInBogota()
 
     // Week of the selected date (Monday to Sunday)
     const weekStart = format(startOfWeek(parseISO(date), { weekStartsOn: 1 }), 'yyyy-MM-dd')
     const weekEnd = format(addDays(parseISO(weekStart), 6), 'yyyy-MM-dd')
 
     // Fetch data in parallel
-    const [operations, productSales, allProducts, weeklyRecords] = await Promise.all([
+    const [operations, productSales, allProducts, weeklyRecords, stylists] = await Promise.all([
         getDailyOperations(date),
         getDailyProductSales(date),
         db.select().from(products),
         getWeeklyRecords(weekStart, weekEnd),
+        getActiveEmployeeNames(),
     ])
 
     return (
@@ -36,6 +39,7 @@ export default async function DailyInvoicesPage(props: PageProps) {
                 products={allProducts}
                 weekStart={weekStart}
                 weeklyRecords={weeklyRecords}
+                stylists={stylists}
             />
         </div>
     )

@@ -27,6 +27,7 @@ export async function addDailyOperation(data: {
         await db.insert(dailyOperations).values(newRecord)
         revalidatePath("/admin/dashboard/daily-invoices")
         revalidatePath("/admin/daily-invoices")
+        revalidatePath("/admin/dashboard/ingresos")
         return { success: true, operation: newRecord }
     } catch (error) {
         console.error("Error adding daily operation:", error)
@@ -42,6 +43,7 @@ export async function deleteDailyOperation(id: string) {
     await db.delete(dailyOperations).where(eq(dailyOperations.id, id))
     revalidatePath("/admin/dashboard/daily-invoices")
     revalidatePath("/admin/daily-invoices")
+    revalidatePath("/admin/dashboard/ingresos")
 }
 
 export async function deleteDailyOperations(ids: string[]) {
@@ -49,6 +51,7 @@ export async function deleteDailyOperations(ids: string[]) {
     await db.delete(dailyOperations).where(inArray(dailyOperations.id, ids))
     revalidatePath("/admin/dashboard/daily-invoices")
     revalidatePath("/admin/daily-invoices")
+    revalidatePath("/admin/dashboard/ingresos")
 }
 
 export async function updateDailyOperation(id: string, data: {
@@ -63,6 +66,7 @@ export async function updateDailyOperation(id: string, data: {
             .where(eq(dailyOperations.id, id))
         revalidatePath("/admin/dashboard/daily-invoices")
         revalidatePath("/admin/daily-invoices")
+        revalidatePath("/admin/dashboard/ingresos")
         return { success: true }
     } catch (error) {
         console.error("Error updating daily operation:", error)
@@ -85,6 +89,7 @@ export async function addDailyProductSale(data: {
         })
         revalidatePath("/admin/dashboard/daily-invoices")
         revalidatePath("/admin/daily-invoices")
+        revalidatePath("/admin/dashboard/ingresos")
         return { success: true }
     } catch (error) {
         console.error("Error adding daily product sale:", error)
@@ -113,6 +118,7 @@ export async function deleteDailyProductSale(id: string) {
     await db.delete(dailyProductSales).where(eq(dailyProductSales.id, id))
     revalidatePath("/admin/dashboard/daily-invoices")
     revalidatePath("/admin/daily-invoices")
+    revalidatePath("/admin/dashboard/ingresos")
 }
 
 export async function deleteDailyProductSales(ids: string[]) {
@@ -120,6 +126,7 @@ export async function deleteDailyProductSales(ids: string[]) {
     await db.delete(dailyProductSales).where(inArray(dailyProductSales.id, ids))
     revalidatePath("/admin/dashboard/daily-invoices")
     revalidatePath("/admin/daily-invoices")
+    revalidatePath("/admin/dashboard/ingresos")
 }
 
 // Weekly Summary
@@ -250,6 +257,7 @@ export async function generateInvoiceFromDaily(
 
     revalidatePath("/admin/dashboard/daily-invoices")
     revalidatePath("/admin/daily-invoices")
+    revalidatePath("/admin/dashboard/ingresos")
     revalidatePath("/admin/dashboard/facturas")
 
     if (!serviceInvoiceId && !productInvoiceId) {
