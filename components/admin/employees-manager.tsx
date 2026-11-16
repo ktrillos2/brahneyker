@@ -43,6 +43,10 @@ export function EmployeesManager({ employees }: { employees: Employee[] }) {
 
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault()
+        if (!newName.trim()) {
+            toast.error("Escribe el nombre de la empleada")
+            return
+        }
         if (await run(() => createEmployee(newName), "Empleada agregada")) setNewName("")
     }
 
@@ -71,8 +75,8 @@ export function EmployeesManager({ employees }: { employees: Employee[] }) {
                     placeholder="Nombre de la nueva empleada"
                     disabled={busy}
                 />
-                <Button type="submit" disabled={busy || !newName.trim()}>
-                    <Plus className="h-4 w-4 mr-1" /> Agregar
+                <Button type="submit" disabled={busy}>
+                    <Plus className="h-4 w-4 mr-1" /> {busy ? "Guardando..." : "Agregar"}
                 </Button>
             </form>
 
