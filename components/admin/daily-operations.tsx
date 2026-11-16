@@ -9,6 +9,7 @@ import { Calendar as CalendarIcon } from "lucide-react"
 import { generateInvoiceFromDaily, deleteDailyOperations, deleteDailyProductSales } from "@/app/actions/daily-operations"
 import { DailyServicesForm } from "./daily-services-form"
 import { DailyProductsForm } from "./daily-products-form"
+import { WeeklySummary, type WeeklyRecords } from "./weekly-summary"
 
 import {
     AlertDialog,
@@ -34,9 +35,11 @@ interface DailyOperationsProps {
     operations: any[]
     productSales: any[]
     products: any[]
+    weekStart: string
+    weeklyRecords: WeeklyRecords
 }
 
-export function DailyOperations({ date, operations, productSales, products }: DailyOperationsProps) {
+export function DailyOperations({ date, operations, productSales, products, weekStart, weeklyRecords }: DailyOperationsProps) {
     const router = useRouter()
     const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date(date + 'T00:00:00'))
     const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([])
@@ -133,6 +136,13 @@ export function DailyOperations({ date, operations, productSales, products }: Da
                     </Popover>
                 </div>
             </div>
+
+            <WeeklySummary
+                date={date}
+                weekStart={weekStart}
+                records={weeklyRecords}
+                onSelectDate={(day) => handleDateSelect(new Date(day + 'T00:00:00'))}
+            />
 
             <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/20">
                 <div className="text-sm">

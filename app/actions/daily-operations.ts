@@ -2,7 +2,7 @@
 
 import { db } from "@/lib/db"
 import { dailyOperations, dailyProductSales, invoices, invoiceItems, products } from "@/lib/schema"
-import { eq, and, sql, inArray } from "drizzle-orm"
+import { eq, and, sql, inArray, gte, lte } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 
 // Daily Operations (Services)
@@ -120,6 +120,32 @@ export async function deleteDailyProductSales(ids: string[]) {
     await db.delete(dailyProductSales).where(inArray(dailyProductSales.id, ids))
     revalidatePath("/admin/dashboard/daily-invoices")
     revalidatePath("/admin/daily-invoices")
+}
+
+// Weekly Summary
+
+export async function getWeeklyRecords(startDate: string, endDate: string) {
+    const [operations, productSales] = await Promise.all([
+        db.select({
+            date: dailyOperations.date,
+            stylist: dailyOperations.stylist,
+            amount: dailyOperations.amount,
+            status: dailyOperations.status,
+        })
+            .from(dailyOperations)
+            .where(and(gte(dailyOperations.date, startDate), lte(dailyOperations.date, endDate))),
+        db.select({
+            date: dailyProductSales.date,
+            quantity: dailyProductSales.quantity,
+            status: dailyProductSales.status,
+            productPrice: products.price,
+        })
+            .from(dailyProductSales)
+            .leftJoin(products, eq(dailyProductSales.productId, products.id))
+            .where(and(gte(dailyProductSales.date, startDate), lte(dailyProductSales.date, endDate))),
+    ])
+
+    return { operations, productSales }
 }
 
 // Invoice Generation

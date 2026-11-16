@@ -1,9 +1,9 @@
 import { Suspense } from "react"
-import { getDailyOperations, getDailyProductSales } from "@/app/actions/daily-operations"
+import { getDailyOperations, getDailyProductSales, getWeeklyRecords } from "@/app/actions/daily-operations"
 import { db } from "@/lib/db"
 import { products } from "@/lib/schema"
 import { DailyOperations } from "@/components/admin/daily-operations"
-import { format } from "date-fns"
+import { addDays, format, parseISO, startOfWeek } from "date-fns"
 
 export const dynamic = 'force-dynamic'
 
@@ -15,11 +15,16 @@ export default async function DailyInvoicesPage(props: PageProps) {
     const searchParams = await props.searchParams;
     const date = typeof searchParams.date === 'string' ? searchParams.date : format(new Date(), 'yyyy-MM-dd')
 
+    // Week of the selected date (Monday to Sunday)
+    const weekStart = format(startOfWeek(parseISO(date), { weekStartsOn: 1 }), 'yyyy-MM-dd')
+    const weekEnd = format(addDays(parseISO(weekStart), 6), 'yyyy-MM-dd')
+
     // Fetch data in parallel
-    const [operations, productSales, allProducts] = await Promise.all([
+    const [operations, productSales, allProducts, weeklyRecords] = await Promise.all([
         getDailyOperations(date),
         getDailyProductSales(date),
         db.select().from(products),
+        getWeeklyRecords(weekStart, weekEnd),
     ])
 
     return (
@@ -29,6 +34,8 @@ export default async function DailyInvoicesPage(props: PageProps) {
                 operations={operations}
                 productSales={productSales}
                 products={allProducts}
+                weekStart={weekStart}
+                weeklyRecords={weeklyRecords}
             />
         </div>
     )
