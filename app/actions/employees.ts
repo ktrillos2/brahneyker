@@ -1,7 +1,7 @@
 "use server"
 
 import { db } from "@/lib/db"
-import { appointments, dailyOperations, employees } from "@/lib/schema"
+import { employees } from "@/lib/schema"
 import { eq, sql } from "drizzle-orm"
 import { verifySession } from "@/lib/auth"
 import { revalidatePath } from "next/cache"
@@ -45,45 +45,6 @@ export async function createEmployee(rawName: string) {
     }
 }
 
-// Renaming keeps the person's history: past appointments and services move to the new name.
-export async function renameEmployee(id: string, rawName: string) {
-    await verifySession()
-    const name = rawName.trim()
-    if (!name) return { error: "Escribe el nombre de la empleada" }
-
-    try {
-        await ensureEmployeesTable()
-        const current = await db.select().from(employees).where(eq(employees.id, id)).get()
-        if (!current) return { error: "Empleada no encontrada" }
-        if (current.name === name) return { success: true }
-        if (await nameTaken(name, id)) return { error: "Ya existe una empleada con ese nombre" }
-
-        await db.batch([
-            db.update(employees).set({ name }).where(eq(employees.id, id)),
-            db.update(appointments).set({ stylist: name }).where(eq(appointments.stylist, current.name)),
-            db.update(dailyOperations).set({ stylist: name }).where(eq(dailyOperations.stylist, current.name)),
-        ])
-        revalidateEmployeeViews()
-        return { success: true }
-    } catch (error) {
-        console.error("Rename employee error:", error)
-        return { error: "Error al cambiar el nombre" }
-    }
-}
-
-export async function setEmployeeActive(id: string, active: boolean) {
-    await verifySession()
-    try {
-        await ensureEmployeesTable()
-        await db.update(employees).set({ active }).where(eq(employees.id, id))
-        revalidateEmployeeViews()
-        return { success: true }
-    } catch (error) {
-        console.error("Set employee active error:", error)
-        return { error: "Error al actualizar empleada" }
-    }
-}
-
 export async function moveEmployee(id: string, direction: -1 | 1) {
     await verifySession()
     try {
@@ -105,22 +66,11 @@ export async function moveEmployee(id: string, direction: -1 | 1) {
     }
 }
 
-// Only employees without appointments or services can be deleted; others are deactivated.
+// Past appointments and services keep the employee's name, so deleting does not erase history.
 export async function deleteEmployee(id: string) {
     await verifySession()
     try {
         await ensureEmployeesTable()
-        const current = await db.select().from(employees).where(eq(employees.id, id)).get()
-        if (!current) return { success: true }
-
-        const [[{ ops }], [{ appts }]] = await Promise.all([
-            db.select({ ops: sql<number>`count(*)` }).from(dailyOperations).where(eq(dailyOperations.stylist, current.name)),
-            db.select({ appts: sql<number>`count(*)` }).from(appointments).where(eq(appointments.stylist, current.name)),
-        ])
-        if (ops > 0 || appts > 0) {
-            return { error: `${current.name} tiene servicios o citas registradas. Desactívala para conservar el historial.` }
-        }
-
         await db.delete(employees).where(eq(employees.id, id))
         revalidateEmployeeViews()
         return { success: true }

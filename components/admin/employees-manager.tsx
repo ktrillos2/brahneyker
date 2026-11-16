@@ -2,26 +2,21 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowDown, ArrowUp, Check, Pencil, Plus, Trash2, X } from "lucide-react"
+import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
-import { createEmployee, deleteEmployee, moveEmployee, renameEmployee, setEmployeeActive } from "@/app/actions/employees"
+import { createEmployee, deleteEmployee, moveEmployee } from "@/app/actions/employees"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Switch } from "@/components/ui/switch"
-import { cn } from "@/lib/utils"
 
 interface Employee {
     id: string
     name: string
-    active: boolean
 }
 
 export function EmployeesManager({ employees }: { employees: Employee[] }) {
     const router = useRouter()
     const [newName, setNewName] = useState("")
-    const [editingId, setEditingId] = useState<string | null>(null)
-    const [editName, setEditName] = useState("")
     const [busy, setBusy] = useState(false)
 
     const run = async (action: () => Promise<{ error?: string; success?: boolean }>, successMessage?: string) => {
@@ -49,12 +44,8 @@ export function EmployeesManager({ employees }: { employees: Employee[] }) {
         if (await run(() => createEmployee(newName), "Empleada agregada")) setNewName("")
     }
 
-    const handleRename = async (id: string) => {
-        if (await run(() => renameEmployee(id, editName), "Nombre actualizado")) setEditingId(null)
-    }
-
     const handleDelete = async (employee: Employee) => {
-        if (!confirm(`¿Eliminar a ${employee.name}?`)) return
+        if (!confirm(`¿Eliminar a ${employee.name}? Sus servicios y citas anteriores se conservan.`)) return
         await run(() => deleteEmployee(employee.id), "Empleada eliminada")
     }
 
@@ -63,7 +54,7 @@ export function EmployeesManager({ employees }: { employees: Employee[] }) {
             <div>
                 <h1 className="text-3xl font-bold tracking-tight">Empleadas</h1>
                 <p className="text-muted-foreground">
-                    Las empleadas activas aparecen en la agenda de citas, la facturación diaria, los ingresos y el bot de WhatsApp, en este orden.
+                    Las empleadas aparecen en la agenda de citas, la facturación diaria, los ingresos y el bot de WhatsApp, en este orden.
                 </p>
             </div>
 
@@ -106,66 +97,23 @@ export function EmployeesManager({ employees }: { employees: Employee[] }) {
                             </button>
                         </div>
 
-                        {editingId === employee.id ? (
-                            <form
-                                className="flex flex-1 gap-2"
-                                onSubmit={(e) => {
-                                    e.preventDefault()
-                                    handleRename(employee.id)
-                                }}
-                            >
-                                <Input value={editName} onChange={(e) => setEditName(e.target.value)} autoFocus disabled={busy} />
-                                <Button type="submit" size="icon" disabled={busy || !editName.trim()} title="Guardar">
-                                    <Check className="h-4 w-4" />
-                                </Button>
-                                <Button type="button" size="icon" variant="outline" onClick={() => setEditingId(null)} title="Cancelar">
-                                    <X className="h-4 w-4" />
-                                </Button>
-                            </form>
-                        ) : (
-                            <>
-                                <span className={cn("flex-1 font-medium", !employee.active && "text-muted-foreground line-through")}>
-                                    {employee.name}
-                                </span>
-                                <label className="flex items-center gap-2 text-sm text-muted-foreground">
-                                    {employee.active ? "Activa" : "Inactiva"}
-                                    <Switch
-                                        checked={employee.active}
-                                        disabled={busy}
-                                        onCheckedChange={(checked) => run(() => setEmployeeActive(employee.id, checked))}
-                                    />
-                                </label>
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setEditingId(employee.id)
-                                        setEditName(employee.name)
-                                    }}
-                                    className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground"
-                                    title="Cambiar nombre"
-                                >
-                                    <Pencil className="h-4 w-4" />
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => handleDelete(employee)}
-                                    disabled={busy}
-                                    className="p-2 rounded-lg hover:bg-muted text-red-500 hover:text-red-700"
-                                    title="Eliminar"
-                                >
-                                    <Trash2 className="h-4 w-4" />
-                                </button>
-                            </>
-                        )}
+                        <span className="flex-1 font-medium">{employee.name}</span>
+                        <button
+                            type="button"
+                            onClick={() => handleDelete(employee)}
+                            disabled={busy}
+                            className="p-2 rounded-lg hover:bg-muted text-red-500 hover:text-red-700"
+                            title="Eliminar"
+                        >
+                            <Trash2 className="h-4 w-4" />
+                        </button>
                     </div>
                 ))}
             </div>
 
-            <div className="text-sm text-muted-foreground space-y-1">
-                <p><strong>Cambiar nombre</strong> corrige el nombre de la misma persona: sus citas y servicios anteriores quedan con el nombre nuevo.</p>
-                <p><strong>Desactivar</strong> se usa cuando alguien deja de trabajar: deja de aparecer para registrar, pero su historial se conserva.</p>
-                <p>Solo se puede <strong>eliminar</strong> una empleada que no tenga citas ni servicios registrados.</p>
-            </div>
+            <p className="text-sm text-muted-foreground">
+                Al eliminar una empleada, sus servicios y citas anteriores se conservan con su nombre en los ingresos y facturas.
+            </p>
         </div>
     )
 }
