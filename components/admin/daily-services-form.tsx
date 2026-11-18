@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Trash2, ChevronDown, User, PlusCircle, Sparkles, DollarSign, Users, Scissors } from "lucide-react"
+import { Trash2, User, PlusCircle, Sparkles, DollarSign, Users, Scissors } from "lucide-react"
 import { toast } from "sonner"
 import {
     Accordion,
@@ -481,43 +481,45 @@ export function DailyServicesForm({ date, operations, onSelectionChange, selecte
 
                                 return (
                                     <AccordionItem key={stylistName} value={stylistName} className="border border-border/70 rounded-xl overflow-hidden shadow-sm">
-                                        <AccordionTrigger className="flex items-center justify-between p-4 bg-muted/30 hover:bg-muted/50 transition-colors hover:no-underline">
-                                            <div className="flex items-center gap-4 flex-1">
-                                                <div onClick={(e) => e.stopPropagation()}>
-                                                    <Checkbox
-                                                        checked={allSelected}
-                                                        onCheckedChange={(checked) => {
-                                                            const stylistOpIds = stylistOps.filter(op => op.status !== 'facturada').map(op => op.id)
-                                                            if (checked) {
-                                                                const toAdd = stylistOpIds.filter(id => !selectedIds.includes(id))
-                                                                onSelectionChange([...selectedIds, ...toAdd])
-                                                            } else {
-                                                                onSelectionChange(selectedIds.filter(id => !stylistOpIds.includes(id)))
-                                                            }
-                                                        }}
-                                                    />
-                                                </div>
-                                                <div className="flex items-center gap-3 text-left">
-                                                    <div className="p-2.5 bg-primary/10 rounded-xl">
-                                                        <User className="h-5 w-5 text-primary" />
-                                                    </div>
-                                                    <div>
-                                                        <h3 className="font-bold text-lg">{stylistName}</h3>
-                                                        <p className="text-xs text-muted-foreground font-normal">
-                                                            {stylistOps.length} {stylistOps.length === 1 ? "servicio" : "servicios"} • {Object.keys(clientGroups).length} {Object.keys(clientGroups).length === 1 ? "cliente" : "clientes"}
-                                                        </p>
-                                                    </div>
-                                                </div>
+                                        <div className="flex items-center bg-muted/30 hover:bg-muted/50 transition-colors [&>h3]:flex-1">
+                                            {/* Checkbox lives outside the trigger: a button cannot contain another button */}
+                                            <div className="pl-4">
+                                                <Checkbox
+                                                    checked={allSelected}
+                                                    onCheckedChange={(checked) => {
+                                                        const stylistOpIds = stylistOps.filter(op => op.status !== 'facturada').map(op => op.id)
+                                                        if (checked) {
+                                                            const toAdd = stylistOpIds.filter(id => !selectedIds.includes(id))
+                                                            onSelectionChange([...selectedIds, ...toAdd])
+                                                        } else {
+                                                            onSelectionChange(selectedIds.filter(id => !stylistOpIds.includes(id)))
+                                                        }
+                                                    }}
+                                                />
                                             </div>
-
-                                            <div className="flex items-center gap-6">
-                                                <div className="text-right mr-2">
-                                                    <p className="text-xl font-extrabold text-primary">${totalAmount.toLocaleString('es-CO')}</p>
-                                                    <p className="text-xs text-muted-foreground">Total Estilista</p>
+                                            <AccordionTrigger className="flex items-center justify-between p-4 hover:no-underline">
+                                                <div className="flex items-center gap-4 flex-1">
+                                                    <div className="flex items-center gap-3 text-left">
+                                                        <div className="p-2.5 bg-primary/10 rounded-xl">
+                                                            <User className="h-5 w-5 text-primary" />
+                                                        </div>
+                                                        <div>
+                                                            <p className="font-bold text-lg">{stylistName}</p>
+                                                            <p className="text-xs text-muted-foreground font-normal">
+                                                                {stylistOps.length} {stylistOps.length === 1 ? "servicio" : "servicios"} • {Object.keys(clientGroups).length} {Object.keys(clientGroups).length === 1 ? "cliente" : "clientes"}
+                                                            </p>
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                                <ChevronDown className="h-4 w-4 shrink-0 transition-transform duration-200" />
-                                            </div>
-                                        </AccordionTrigger>
+    
+                                                <div className="flex items-center gap-6">
+                                                    <div className="text-right mr-2">
+                                                        <p className="text-xl font-extrabold text-primary">${totalAmount.toLocaleString('es-CO')}</p>
+                                                        <p className="text-xs text-muted-foreground">Total Estilista</p>
+                                                    </div>
+                                                </div>
+                                            </AccordionTrigger>
+                                        </div>
 
                                         <AccordionContent className="p-4 space-y-4 border-t bg-card/40">
                                             {Object.entries(clientGroups).map(([groupClientName, clientOps]) => {
