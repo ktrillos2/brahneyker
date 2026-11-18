@@ -457,7 +457,6 @@ export function IncomeDay({ date, columns, operations, productSales, closure, ca
             <p className="text-xs text-muted-foreground">
                 Escribe los valores en miles como en el cuaderno: 45 = $45.000. Para corregir un valor, haz clic sobre él.
                 Los valores con <Check className="inline h-3 w-3 text-green-600" /> ya están facturados.
-                Para agregar el detalle o la cliente de un servicio, usa Facturación Diaria.
             </p>
         </div>
     )

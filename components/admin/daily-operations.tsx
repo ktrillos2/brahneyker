@@ -37,11 +37,10 @@ interface DailyOperationsProps {
     products: any[]
     weekStart: string
     weeklyRecords: WeeklyRecords
-    stylists: string[]
     isClosed: boolean
 }
 
-export function DailyOperations({ date, operations, productSales, products, weekStart, weeklyRecords, stylists, isClosed }: DailyOperationsProps) {
+export function DailyOperations({ date, operations, productSales, products, weekStart, weeklyRecords, isClosed }: DailyOperationsProps) {
     const router = useRouter()
     const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date(date + 'T00:00:00'))
     const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([])
@@ -227,7 +226,6 @@ export function DailyOperations({ date, operations, productSales, products, week
                         operations={operations}
                         selectedIds={selectedServiceIds}
                         onSelectionChange={setSelectedServiceIds}
-                        stylists={stylists}
                     />
                 </TabsContent>
                 <TabsContent value="products" className="space-y-4">
