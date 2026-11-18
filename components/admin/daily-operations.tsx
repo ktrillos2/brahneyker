@@ -4,7 +4,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
-import { Calendar as CalendarIcon } from "lucide-react"
+import { Calendar as CalendarIcon, Lock } from "lucide-react"
 
 import { generateInvoiceFromDaily, deleteDailyOperations, deleteDailyProductSales } from "@/app/actions/daily-operations"
 import { DailyServicesForm } from "./daily-services-form"
@@ -38,9 +38,10 @@ interface DailyOperationsProps {
     weekStart: string
     weeklyRecords: WeeklyRecords
     stylists: string[]
+    isClosed: boolean
 }
 
-export function DailyOperations({ date, operations, productSales, products, weekStart, weeklyRecords, stylists }: DailyOperationsProps) {
+export function DailyOperations({ date, operations, productSales, products, weekStart, weeklyRecords, stylists, isClosed }: DailyOperationsProps) {
     const router = useRouter()
     const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date(date + 'T00:00:00'))
     const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([])
@@ -87,10 +88,16 @@ export function DailyOperations({ date, operations, productSales, products, week
 
         setIsDeleting(true)
         try {
-            await Promise.all([
-                selectedServiceIds.length > 0 ? deleteDailyOperations(selectedServiceIds) : Promise.resolve(),
-                selectedProductSaleIds.length > 0 ? deleteDailyProductSales(selectedProductSaleIds) : Promise.resolve()
+            const results = await Promise.all([
+                deleteDailyOperations(selectedServiceIds),
+                deleteDailyProductSales(selectedProductSaleIds),
             ])
+            const failed = results.find((r) => !r.success)
+            if (failed) {
+                toast.error(failed.error)
+                router.refresh()
+                return
+            }
             toast.success("Elementos eliminados correctamente")
             setSelectedServiceIds([])
             setSelectedProductSaleIds([])
@@ -137,6 +144,13 @@ export function DailyOperations({ date, operations, productSales, products, week
                     </Popover>
                 </div>
             </div>
+
+            {isClosed && (
+                <div className="flex items-center gap-3 rounded-lg border border-primary/40 bg-primary/10 p-4 text-sm">
+                    <Lock className="h-5 w-5 shrink-0 text-primary" />
+                    <p><strong>Caja cerrada.</strong> Los servicios y ventas de este día ya no se pueden agregar, editar ni eliminar. Sí se pueden facturar.</p>
+                </div>
+            )}
 
             <WeeklySummary
                 date={date}

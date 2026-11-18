@@ -102,3 +102,11 @@ export const employees = sqliteTable("employees", {
     sortOrder: integer("sort_order").notNull().default(0),
     createdAt: text("created_at").default(sql`(CURRENT_TIMESTAMP)`),
 })
+
+// Daily Closures Table (a closed day can no longer be edited)
+export const dailyClosures = sqliteTable("daily_closures", {
+    date: text("date").primaryKey(), // YYYY-MM-DD
+    servicesTotal: real("services_total").notNull(),
+    productsTotal: real("products_total").notNull(),
+    closedAt: text("closed_at").default(sql`(CURRENT_TIMESTAMP)`),
+})

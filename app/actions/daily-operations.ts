@@ -4,6 +4,30 @@ import { db } from "@/lib/db"
 import { dailyOperations, dailyProductSales, invoices, invoiceItems, products } from "@/lib/schema"
 import { eq, and, sql, inArray, gte, lte } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
+import { assertDaysOpen, ClosedDayError } from "@/lib/closures"
+import { verifySession } from "@/lib/auth"
+
+function revalidateDailyViews() {
+    revalidatePath("/admin/dashboard/daily-invoices")
+    revalidatePath("/admin/daily-invoices")
+    revalidatePath("/admin/dashboard/ingresos")
+}
+
+function errorMessage(error: unknown, fallback: string) {
+    return error instanceof ClosedDayError ? error.message : fallback
+}
+
+async function operationDates(ids: string[]) {
+    if (ids.length === 0) return []
+    const rows = await db.select({ date: dailyOperations.date }).from(dailyOperations).where(inArray(dailyOperations.id, ids))
+    return rows.map((r) => r.date)
+}
+
+async function productSaleDates(ids: string[]) {
+    if (ids.length === 0) return []
+    const rows = await db.select({ date: dailyProductSales.date }).from(dailyProductSales).where(inArray(dailyProductSales.id, ids))
+    return rows.map((r) => r.date)
+}
 
 // Daily Operations (Services)
 
@@ -15,6 +39,7 @@ export async function addDailyOperation(data: {
     date: string
 }) {
     try {
+        await assertDaysOpen([data.date])
         const newRecord = {
             id: crypto.randomUUID(),
             stylist: data.stylist,
@@ -25,13 +50,11 @@ export async function addDailyOperation(data: {
             status: "pendiente",
         }
         await db.insert(dailyOperations).values(newRecord)
-        revalidatePath("/admin/dashboard/daily-invoices")
-        revalidatePath("/admin/daily-invoices")
-        revalidatePath("/admin/dashboard/ingresos")
+        revalidateDailyViews()
         return { success: true, operation: newRecord }
     } catch (error) {
         console.error("Error adding daily operation:", error)
-        return { success: false, error: "Error al registrar servicio. Verifique la conexión o contacte soporte." }
+        return { success: false, error: errorMessage(error, "Error al registrar servicio. Verifique la conexión o contacte soporte.") }
     }
 }
 
@@ -40,18 +63,20 @@ export async function getDailyOperations(date: string) {
 }
 
 export async function deleteDailyOperation(id: string) {
-    await db.delete(dailyOperations).where(eq(dailyOperations.id, id))
-    revalidatePath("/admin/dashboard/daily-invoices")
-    revalidatePath("/admin/daily-invoices")
-    revalidatePath("/admin/dashboard/ingresos")
+    return deleteDailyOperations([id])
 }
 
 export async function deleteDailyOperations(ids: string[]) {
-    if (ids.length === 0) return
-    await db.delete(dailyOperations).where(inArray(dailyOperations.id, ids))
-    revalidatePath("/admin/dashboard/daily-invoices")
-    revalidatePath("/admin/daily-invoices")
-    revalidatePath("/admin/dashboard/ingresos")
+    if (ids.length === 0) return { success: true }
+    try {
+        await assertDaysOpen(await operationDates(ids))
+        await db.delete(dailyOperations).where(inArray(dailyOperations.id, ids))
+        revalidateDailyViews()
+        return { success: true }
+    } catch (error) {
+        console.error("Error deleting daily operations:", error)
+        return { success: false, error: errorMessage(error, "Error al eliminar servicio") }
+    }
 }
 
 export async function updateDailyOperation(id: string, data: {
@@ -61,16 +86,32 @@ export async function updateDailyOperation(id: string, data: {
     amount: number
 }) {
     try {
+        await assertDaysOpen(await operationDates([id]))
         await db.update(dailyOperations)
             .set(data)
             .where(eq(dailyOperations.id, id))
-        revalidatePath("/admin/dashboard/daily-invoices")
-        revalidatePath("/admin/daily-invoices")
-        revalidatePath("/admin/dashboard/ingresos")
+        revalidateDailyViews()
         return { success: true }
     } catch (error) {
         console.error("Error updating daily operation:", error)
-        return { success: false, error: "Error al actualizar servicio. Verifique la conexión o contacte soporte." }
+        return { success: false, error: errorMessage(error, "Error al actualizar servicio. Verifique la conexión o contacte soporte.") }
+    }
+}
+
+export async function updateDailyOperationAmount(id: string, amount: number) {
+    await verifySession()
+    if (!(amount > 0)) return { success: false, error: "El valor debe ser mayor a 0" }
+    try {
+        const op = await db.select().from(dailyOperations).where(eq(dailyOperations.id, id)).get()
+        if (!op) return { success: false, error: "El servicio ya no existe" }
+        if (op.status === "facturada") return { success: false, error: "Este servicio ya está facturado y no se puede cambiar" }
+        await assertDaysOpen([op.date])
+        await db.update(dailyOperations).set({ amount }).where(eq(dailyOperations.id, id))
+        revalidateDailyViews()
+        return { success: true }
+    } catch (error) {
+        console.error("Error updating daily operation amount:", error)
+        return { success: false, error: errorMessage(error, "Error al actualizar el valor") }
     }
 }
 
@@ -82,18 +123,17 @@ export async function addDailyProductSale(data: {
     date: string
 }) {
     try {
+        await assertDaysOpen([data.date])
         await db.insert(dailyProductSales).values({
             id: crypto.randomUUID(),
             ...data,
             status: "pendiente",
         })
-        revalidatePath("/admin/dashboard/daily-invoices")
-        revalidatePath("/admin/daily-invoices")
-        revalidatePath("/admin/dashboard/ingresos")
+        revalidateDailyViews()
         return { success: true }
     } catch (error) {
         console.error("Error adding daily product sale:", error)
-        return { success: false, error: "Error al registrar venta. Verifique la conexión o contacte soporte." }
+        return { success: false, error: errorMessage(error, "Error al registrar venta. Verifique la conexión o contacte soporte.") }
     }
 }
 
@@ -115,18 +155,33 @@ export async function getDailyProductSales(date: string) {
 }
 
 export async function deleteDailyProductSale(id: string) {
-    await db.delete(dailyProductSales).where(eq(dailyProductSales.id, id))
-    revalidatePath("/admin/dashboard/daily-invoices")
-    revalidatePath("/admin/daily-invoices")
-    revalidatePath("/admin/dashboard/ingresos")
+    return deleteDailyProductSales([id])
 }
 
 export async function deleteDailyProductSales(ids: string[]) {
-    if (ids.length === 0) return
-    await db.delete(dailyProductSales).where(inArray(dailyProductSales.id, ids))
-    revalidatePath("/admin/dashboard/daily-invoices")
-    revalidatePath("/admin/daily-invoices")
-    revalidatePath("/admin/dashboard/ingresos")
+    if (ids.length === 0) return { success: true }
+    try {
+        await assertDaysOpen(await productSaleDates(ids))
+        await db.delete(dailyProductSales).where(inArray(dailyProductSales.id, ids))
+        revalidateDailyViews()
+        return { success: true }
+    } catch (error) {
+        console.error("Error deleting daily product sales:", error)
+        return { success: false, error: errorMessage(error, "Error al eliminar venta") }
+    }
+}
+
+// Paginated product search for pickers, so the whole inventory is not loaded at once.
+export async function searchProducts(query: string, offset = 0, limit = 20) {
+    await verifySession()
+    const term = query.trim()
+    const rows = await db.select({ id: products.id, name: products.name, price: products.price, quantity: products.quantity })
+        .from(products)
+        .where(term ? sql`${products.name} LIKE ${"%" + term + "%"}` : undefined)
+        .orderBy(products.name)
+        .limit(limit + 1)
+        .offset(offset)
+    return { products: rows.slice(0, limit), hasMore: rows.length > limit }
 }
 
 // Weekly Summary

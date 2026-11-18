@@ -5,6 +5,7 @@ import { products } from "@/lib/schema"
 import { DailyOperations } from "@/components/admin/daily-operations"
 import { getActiveEmployeeNames } from "@/lib/employees"
 import { todayInBogota } from "@/lib/dates"
+import { getClosure } from "@/lib/closures"
 import { addDays, format, parseISO, startOfWeek } from "date-fns"
 
 export const dynamic = 'force-dynamic'
@@ -22,12 +23,13 @@ export default async function DailyInvoicesPage(props: PageProps) {
     const weekEnd = format(addDays(parseISO(weekStart), 6), 'yyyy-MM-dd')
 
     // Fetch data in parallel
-    const [operations, productSales, allProducts, weeklyRecords, stylists] = await Promise.all([
+    const [operations, productSales, allProducts, weeklyRecords, stylists, closure] = await Promise.all([
         getDailyOperations(date),
         getDailyProductSales(date),
         db.select().from(products),
         getWeeklyRecords(weekStart, weekEnd),
         getActiveEmployeeNames(),
+        getClosure(date),
     ])
 
     return (
@@ -40,6 +42,7 @@ export default async function DailyInvoicesPage(props: PageProps) {
                 weekStart={weekStart}
                 weeklyRecords={weeklyRecords}
                 stylists={stylists}
+                isClosed={closure !== null}
             />
         </div>
     )

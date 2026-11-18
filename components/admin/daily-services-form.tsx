@@ -206,7 +206,12 @@ export function DailyServicesForm({ date, operations, onSelectionChange, selecte
         try {
             setLocalOps(prev => prev.filter(op => op.id !== id))
             onSelectionChange(selectedIds.filter(item => item !== id))
-            await deleteDailyOperation(id)
+            const result = await deleteDailyOperation(id)
+            if (!result.success) {
+                toast.error(result.error)
+                router.refresh()
+                return
+            }
             toast.success("Servicio eliminado correctamente")
             router.refresh()
         } catch (error) {

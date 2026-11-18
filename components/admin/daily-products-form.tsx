@@ -100,7 +100,11 @@ export function DailyProductsForm({ date, products, sales, onSelectionChange, se
 
     async function handleDelete(id: string) {
         try {
-            await deleteDailyProductSale(id)
+            const result = await deleteDailyProductSale(id)
+            if (!result.success) {
+                toast.error(result.error)
+                return
+            }
             toast.success("Venta eliminada")
             router.refresh()
         } catch (error) {

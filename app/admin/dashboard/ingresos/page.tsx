@@ -1,14 +1,11 @@
 import { addDays, format, parseISO, startOfWeek } from "date-fns"
-import { asc } from "drizzle-orm"
-
 import { getDailyOperations, getDailyProductSales, getWeeklyRecords } from "@/app/actions/daily-operations"
 import { IncomeDay } from "@/components/admin/income-day"
 import { IncomeWeek } from "@/components/admin/income-week"
 import { IncomeHeader } from "@/components/admin/income-header"
-import { db } from "@/lib/db"
+import { getClosure, getClosuresBetween } from "@/lib/closures"
 import { todayInBogota } from "@/lib/dates"
 import { listEmployees } from "@/lib/employees"
-import { products } from "@/lib/schema"
 
 export const dynamic = 'force-dynamic'
 
@@ -37,23 +34,24 @@ export default async function IngresosPage(props: PageProps) {
     if (view === 'semana') {
         const weekStart = format(startOfWeek(parseISO(date), { weekStartsOn: 1 }), 'yyyy-MM-dd')
         const weekEnd = format(addDays(parseISO(weekStart), 6), 'yyyy-MM-dd')
-        const records = await getWeeklyRecords(weekStart, weekEnd)
+        const [records, closures] = await Promise.all([
+            getWeeklyRecords(weekStart, weekEnd),
+            getClosuresBetween(weekStart, weekEnd),
+        ])
         const columns = columnsFor(employees, records.operations.map((op) => op.stylist))
 
         return (
             <div className="h-full flex-1 flex-col space-y-6 p-4 md:p-8 md:flex">
                 <IncomeHeader view={view} date={date} />
-                <IncomeWeek weekStart={weekStart} columns={columns} records={records} />
+                <IncomeWeek weekStart={weekStart} columns={columns} records={records} closedDates={closures.map((c) => c.date)} />
             </div>
         )
     }
 
-    const [operations, productSales, productList] = await Promise.all([
+    const [operations, productSales, closure] = await Promise.all([
         getDailyOperations(date),
         getDailyProductSales(date),
-        db.select({ id: products.id, name: products.name, price: products.price, quantity: products.quantity })
-            .from(products)
-            .orderBy(asc(products.name)),
+        getClosure(date),
     ])
     const columns = columnsFor(employees, operations.map((op) => op.stylist))
 
@@ -65,7 +63,8 @@ export default async function IngresosPage(props: PageProps) {
                 columns={columns}
                 operations={operations}
                 productSales={productSales}
-                products={productList}
+                closure={closure}
+                canClose={date <= todayInBogota()}
             />
         </div>
     )

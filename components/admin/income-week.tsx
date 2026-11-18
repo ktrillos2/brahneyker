@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { addDays, format, parseISO } from "date-fns"
 import { es } from "date-fns/locale"
+import { Lock } from "lucide-react"
 
 import { money } from "./income-day"
 import type { WeeklyRecords } from "./weekly-summary"
@@ -11,9 +12,10 @@ interface IncomeWeekProps {
     weekStart: string
     columns: string[]
     records: WeeklyRecords
+    closedDates: string[]
 }
 
-export function IncomeWeek({ weekStart, columns, records }: IncomeWeekProps) {
+export function IncomeWeek({ weekStart, columns, records, closedDates }: IncomeWeekProps) {
     const days = Array.from({ length: 7 }, (_, i) => format(addDays(parseISO(weekStart), i), "yyyy-MM-dd"))
 
     const serviceTotal = (day: string | null, stylist: string | null) =>
@@ -58,6 +60,9 @@ export function IncomeWeek({ weekStart, columns, records }: IncomeWeekProps) {
                                         >
                                             {format(parseISO(day), "EEEE d", { locale: es })}
                                         </Link>
+                                        {closedDates.includes(day) && (
+                                            <Lock className="inline h-3.5 w-3.5 ml-2 text-primary" aria-label="Caja cerrada" />
+                                        )}
                                     </td>
                                     {columns.map((name) => (
                                         <td key={name} className="px-3 py-2 text-right border-r">{cell(serviceTotal(day, name))}</td>
@@ -80,6 +85,10 @@ export function IncomeWeek({ weekStart, columns, records }: IncomeWeekProps) {
                     </tfoot>
                 </table>
             </div>
+
+            <p className="text-xs text-muted-foreground">
+                <Lock className="inline h-3 w-3 text-primary" /> = caja cerrada ese día.
+            </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="rounded-lg border bg-card p-4">
