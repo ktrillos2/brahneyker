@@ -21,7 +21,7 @@ const money = (value: number) => `$${Math.round(value).toLocaleString("es-CO")}`
 
 async function saleRows(ids: string[]) {
     if (ids.length === 0) return []
-    return db.select({ id: dailyProductSales.id, date: dailyProductSales.date, quantity: dailyProductSales.quantity, name: products.name })
+    return db.select({ id: dailyProductSales.id, date: dailyProductSales.date, quantity: dailyProductSales.quantity, status: dailyProductSales.status, name: products.name })
         .from(dailyProductSales)
         .leftJoin(products, eq(dailyProductSales.productId, products.id))
         .where(inArray(dailyProductSales.id, ids))
@@ -101,24 +101,6 @@ export async function updateDailyOperation(id: string, data: {
     }
 }
 
-export async function updateDailyOperationAmount(id: string, amount: number, reason?: string) {
-    await verifySession()
-    if (!(amount > 0)) return { success: false, error: "El valor debe ser mayor a 0" }
-    try {
-        const op = await db.select().from(dailyOperations).where(eq(dailyOperations.id, id)).get()
-        if (!op) return { success: false, error: "El servicio ya no existe" }
-        if (op.status === "facturada") return { success: false, error: "Este servicio ya está facturado y no se puede cambiar" }
-        await guardClosedDays([op.date], reason,
-            () => `Cambió servicio de ${op.stylist} de ${money(op.amount)} a ${money(amount)}`,
-            (tx) => tx.update(dailyOperations).set({ amount }).where(eq(dailyOperations.id, id)))
-        revalidateDailyViews()
-        return { success: true }
-    } catch (error) {
-        console.error("Error updating daily operation amount:", error)
-        return { success: false, error: errorMessage(error, "Error al actualizar el valor") }
-    }
-}
-
 // Daily Product Sales
 
 export async function addDailyProductSale(data: {
@@ -176,6 +158,106 @@ export async function deleteDailyProductSales(ids: string[], reason?: string) {
     } catch (error) {
         console.error("Error deleting daily product sales:", error)
         return { success: false, error: errorMessage(error, "Error al eliminar venta") }
+    }
+}
+
+// Draft changes made in Ingresos' edit mode, saved together in one transaction.
+export interface DayChanges {
+    adds: { stylist: string; amount: number }[]
+    updates: { id: string; amount: number }[]
+    deletes: string[]
+    saleAdds: { productId: string; quantity: number }[]
+    saleDeletes: string[]
+}
+
+export async function applyDayChanges(date: string, changes: DayChanges, reason?: string) {
+    await verifySession()
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { success: false, error: "Fecha inválida" }
+    if (changes.adds.some((a) => !a.stylist || !(a.amount > 0)) || changes.updates.some((u) => !(u.amount > 0))) {
+        return { success: false, error: "Todos los valores deben ser mayores a 0" }
+    }
+    if (changes.saleAdds.some((s) => !s.productId || !Number.isInteger(s.quantity) || s.quantity < 1)) {
+        return { success: false, error: "La cantidad de cada producto debe ser 1 o más" }
+    }
+
+    try {
+        const opIds = [...new Set([...changes.updates.map((u) => u.id), ...changes.deletes])]
+        const [ops, sales, addedProducts] = await Promise.all([
+            opIds.length ? db.select().from(dailyOperations).where(inArray(dailyOperations.id, opIds)) : Promise.resolve([]),
+            saleRows(changes.saleDeletes),
+            changes.saleAdds.length
+                ? db.select({ id: products.id, name: products.name }).from(products)
+                    .where(inArray(products.id, changes.saleAdds.map((s) => s.productId)))
+                : Promise.resolve([]),
+        ])
+        const opById = new Map(ops.map((op) => [op.id, op]))
+
+        // Only pending records of this same day can be changed; the draft may be stale.
+        const invalidOp = opIds.find((id) => {
+            const op = opById.get(id)
+            return !op || op.date !== date || op.status === "facturada"
+        })
+        const invalidSale = new Set(changes.saleDeletes).size !== sales.length
+            || sales.some((sale) => sale.date !== date || sale.status === "facturada")
+        if (invalidOp || invalidSale) {
+            return { success: false, error: "Algunos registros del borrador ya no existen o ya fueron facturados. Descarta el borrador y vuelve a intentarlo." }
+        }
+        if (addedProducts.length !== new Set(changes.saleAdds.map((s) => s.productId)).size) {
+            return { success: false, error: "Algún producto del borrador ya no existe" }
+        }
+
+        const productName = new Map(addedProducts.map((p) => [p.id, p.name]))
+        const lines = [
+            ...changes.adds.map((a) => `Agregó servicio de ${a.stylist} por ${money(a.amount)}`),
+            ...changes.updates.map((u) => {
+                const op = opById.get(u.id)!
+                return `Cambió servicio de ${op.stylist} de ${money(op.amount)} a ${money(u.amount)}`
+            }),
+            ...changes.deletes.map((id) => {
+                const op = opById.get(id)!
+                return `Eliminó servicio de ${op.stylist} por ${money(op.amount)}`
+            }),
+            ...changes.saleAdds.map((s) => `Agregó venta: ${productName.get(s.productId)} ×${s.quantity}`),
+            ...sales.map((sale) => `Eliminó venta: ${sale.name ?? "producto"} ×${sale.quantity}`),
+        ]
+        if (lines.length === 0) return { success: true }
+
+        await guardClosedDays([date], reason, () => lines.join(" · "), async (tx) => {
+            if (changes.adds.length) {
+                await tx.insert(dailyOperations).values(changes.adds.map((a) => ({
+                    id: crypto.randomUUID(),
+                    stylist: a.stylist,
+                    clientName: null,
+                    description: "Servicio",
+                    amount: a.amount,
+                    date,
+                    status: "pendiente",
+                })))
+            }
+            for (const u of changes.updates) {
+                await tx.update(dailyOperations).set({ amount: u.amount }).where(eq(dailyOperations.id, u.id))
+            }
+            if (changes.deletes.length) {
+                await tx.delete(dailyOperations).where(inArray(dailyOperations.id, changes.deletes))
+            }
+            if (changes.saleAdds.length) {
+                await tx.insert(dailyProductSales).values(changes.saleAdds.map((s) => ({
+                    id: crypto.randomUUID(),
+                    productId: s.productId,
+                    quantity: s.quantity,
+                    date,
+                    status: "pendiente",
+                })))
+            }
+            if (changes.saleDeletes.length) {
+                await tx.delete(dailyProductSales).where(inArray(dailyProductSales.id, changes.saleDeletes))
+            }
+        })
+        revalidateDailyViews()
+        return { success: true }
+    } catch (error) {
+        console.error("Error applying day changes:", error)
+        return { success: false, error: errorMessage(error, "Error al guardar los cambios") }
     }
 }
 
