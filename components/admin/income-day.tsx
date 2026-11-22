@@ -4,7 +4,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { format, parseISO } from "date-fns"
 import { es } from "date-fns/locale"
-import { Check, Lock, Plus, X } from "lucide-react"
+import { Check, Lock, Pencil, Plus, X } from "lucide-react"
 import { toast } from "sonner"
 
 import {
@@ -236,7 +236,6 @@ function OperationItem({ op, locked, onChanged, requestReason }: { op: Operation
                         setEditing(true)
                     }}
                     className="hover:text-primary hover:underline underline-offset-2"
-                    title="Editar valor"
                 >
                     {money(op.amount)}
                 </button>
@@ -246,14 +245,29 @@ function OperationItem({ op, locked, onChanged, requestReason }: { op: Operation
             {op.status === "facturada" ? (
                 <Check className="h-3.5 w-3.5 text-green-600" aria-label="Facturado" />
             ) : editable ? (
-                <button
-                    type="button"
-                    onClick={remove}
-                    className="text-muted-foreground hover:text-red-500 md:opacity-0 md:group-hover:opacity-100"
-                    title="Eliminar"
-                >
-                    <X className="h-3.5 w-3.5" />
-                </button>
+                <span className="flex items-center gap-1">
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setValue(toInputValue(op.amount))
+                            setEditing(true)
+                        }}
+                        className="h-6 w-6 flex items-center justify-center rounded border text-muted-foreground hover:text-primary hover:border-primary"
+                        title="Editar valor"
+                        aria-label={`Editar ${money(op.amount)} de ${op.stylist}`}
+                    >
+                        <Pencil className="h-3 w-3" />
+                    </button>
+                    <button
+                        type="button"
+                        onClick={remove}
+                        className="h-6 w-6 flex items-center justify-center rounded border text-muted-foreground hover:text-red-500 hover:border-red-500"
+                        title="Eliminar"
+                        aria-label={`Eliminar ${money(op.amount)} de ${op.stylist}`}
+                    >
+                        <X className="h-3 w-3" />
+                    </button>
+                </span>
             ) : null}
         </li>
     )
@@ -403,10 +417,10 @@ export function IncomeDay({ date, columns, operations, productSales, closure, ed
                                                     <button
                                                         type="button"
                                                         onClick={() => removeSale(sale)}
-                                                        className="text-muted-foreground hover:text-red-500 md:opacity-0 md:group-hover:opacity-100"
+                                                        className="h-6 w-6 flex items-center justify-center rounded border text-muted-foreground hover:text-red-500 hover:border-red-500"
                                                         title="Eliminar"
                                                     >
-                                                        <X className="h-3.5 w-3.5" />
+                                                        <X className="h-3 w-3" />
                                                     </button>
                                                 )}
                                             </span>
@@ -514,7 +528,7 @@ export function IncomeDay({ date, columns, operations, productSales, closure, ed
             )}
 
             <p className="text-xs text-muted-foreground">
-                Escribe los valores en miles como en el cuaderno: 45 = $45.000. Para corregir un valor, haz clic sobre él.
+                Escribe los valores en miles como en el cuaderno: 45 = $45.000. Para corregir un valor usa el lápiz o haz clic sobre él.
                 Los valores con <Check className="inline h-3 w-3 text-green-600" /> ya están facturados.
             </p>
         </div>
