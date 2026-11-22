@@ -4,7 +4,7 @@ import { db } from "@/lib/db"
 import { dailyOperations, dailyProductSales, invoices, invoiceItems, products } from "@/lib/schema"
 import { eq, and, sql, inArray, gte, lte } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
-import { assertDaysOpen, ClosedDayError } from "@/lib/closures"
+import { ClosedDayError, guardClosedDays } from "@/lib/closures"
 import { verifySession } from "@/lib/auth"
 
 function revalidateDailyViews() {
@@ -17,19 +17,18 @@ function errorMessage(error: unknown, fallback: string) {
     return error instanceof ClosedDayError ? error.message : fallback
 }
 
-async function operationDates(ids: string[]) {
-    if (ids.length === 0) return []
-    const rows = await db.select({ date: dailyOperations.date }).from(dailyOperations).where(inArray(dailyOperations.id, ids))
-    return rows.map((r) => r.date)
-}
+const money = (value: number) => `$${Math.round(value).toLocaleString("es-CO")}`
 
-async function productSaleDates(ids: string[]) {
+async function saleRows(ids: string[]) {
     if (ids.length === 0) return []
-    const rows = await db.select({ date: dailyProductSales.date }).from(dailyProductSales).where(inArray(dailyProductSales.id, ids))
-    return rows.map((r) => r.date)
+    return db.select({ id: dailyProductSales.id, date: dailyProductSales.date, quantity: dailyProductSales.quantity, name: products.name })
+        .from(dailyProductSales)
+        .leftJoin(products, eq(dailyProductSales.productId, products.id))
+        .where(inArray(dailyProductSales.id, ids))
 }
 
 // Daily Operations (Services)
+// `reason` is required only when the day's cash register is closed (see guardClosedDays).
 
 export async function addDailyOperation(data: {
     stylist: string
@@ -37,9 +36,8 @@ export async function addDailyOperation(data: {
     description: string
     amount: number
     date: string
-}) {
+}, reason?: string) {
     try {
-        await assertDaysOpen([data.date])
         const newRecord = {
             id: crypto.randomUUID(),
             stylist: data.stylist,
@@ -49,7 +47,9 @@ export async function addDailyOperation(data: {
             date: data.date,
             status: "pendiente",
         }
-        await db.insert(dailyOperations).values(newRecord)
+        await guardClosedDays([data.date], reason,
+            () => `Agregó servicio de ${data.stylist} por ${money(data.amount)}`,
+            (tx) => tx.insert(dailyOperations).values(newRecord))
         revalidateDailyViews()
         return { success: true, operation: newRecord }
     } catch (error) {
@@ -62,15 +62,17 @@ export async function getDailyOperations(date: string) {
     return await db.select().from(dailyOperations).where(eq(dailyOperations.date, date))
 }
 
-export async function deleteDailyOperation(id: string) {
-    return deleteDailyOperations([id])
+export async function deleteDailyOperation(id: string, reason?: string) {
+    return deleteDailyOperations([id], reason)
 }
 
-export async function deleteDailyOperations(ids: string[]) {
+export async function deleteDailyOperations(ids: string[], reason?: string) {
     if (ids.length === 0) return { success: true }
     try {
-        await assertDaysOpen(await operationDates(ids))
-        await db.delete(dailyOperations).where(inArray(dailyOperations.id, ids))
+        const ops = await db.select().from(dailyOperations).where(inArray(dailyOperations.id, ids))
+        await guardClosedDays(ops.map((op) => op.date), reason,
+            (date) => "Eliminó " + ops.filter((op) => op.date === date).map((op) => `servicio de ${op.stylist} por ${money(op.amount)}`).join(", "),
+            (tx) => tx.delete(dailyOperations).where(inArray(dailyOperations.id, ids)))
         revalidateDailyViews()
         return { success: true }
     } catch (error) {
@@ -84,12 +86,13 @@ export async function updateDailyOperation(id: string, data: {
     clientName?: string
     description: string
     amount: number
-}) {
+}, reason?: string) {
     try {
-        await assertDaysOpen(await operationDates([id]))
-        await db.update(dailyOperations)
-            .set(data)
-            .where(eq(dailyOperations.id, id))
+        const op = await db.select().from(dailyOperations).where(eq(dailyOperations.id, id)).get()
+        if (!op) return { success: false, error: "El servicio ya no existe" }
+        await guardClosedDays([op.date], reason,
+            () => `Cambió servicio de ${op.stylist} de ${money(op.amount)} a ${data.stylist} por ${money(data.amount)}`,
+            (tx) => tx.update(dailyOperations).set(data).where(eq(dailyOperations.id, id)))
         revalidateDailyViews()
         return { success: true }
     } catch (error) {
@@ -98,15 +101,16 @@ export async function updateDailyOperation(id: string, data: {
     }
 }
 
-export async function updateDailyOperationAmount(id: string, amount: number) {
+export async function updateDailyOperationAmount(id: string, amount: number, reason?: string) {
     await verifySession()
     if (!(amount > 0)) return { success: false, error: "El valor debe ser mayor a 0" }
     try {
         const op = await db.select().from(dailyOperations).where(eq(dailyOperations.id, id)).get()
         if (!op) return { success: false, error: "El servicio ya no existe" }
         if (op.status === "facturada") return { success: false, error: "Este servicio ya está facturado y no se puede cambiar" }
-        await assertDaysOpen([op.date])
-        await db.update(dailyOperations).set({ amount }).where(eq(dailyOperations.id, id))
+        await guardClosedDays([op.date], reason,
+            () => `Cambió servicio de ${op.stylist} de ${money(op.amount)} a ${money(amount)}`,
+            (tx) => tx.update(dailyOperations).set({ amount }).where(eq(dailyOperations.id, id)))
         revalidateDailyViews()
         return { success: true }
     } catch (error) {
@@ -121,14 +125,16 @@ export async function addDailyProductSale(data: {
     productId: string
     quantity: number
     date: string
-}) {
+}, reason?: string) {
     try {
-        await assertDaysOpen([data.date])
-        await db.insert(dailyProductSales).values({
-            id: crypto.randomUUID(),
-            ...data,
-            status: "pendiente",
-        })
+        const product = await db.select({ name: products.name }).from(products).where(eq(products.id, data.productId)).get()
+        await guardClosedDays([data.date], reason,
+            () => `Agregó venta: ${product?.name ?? "producto"} ×${data.quantity}`,
+            (tx) => tx.insert(dailyProductSales).values({
+                id: crypto.randomUUID(),
+                ...data,
+                status: "pendiente",
+            }))
         revalidateDailyViews()
         return { success: true }
     } catch (error) {
@@ -154,15 +160,17 @@ export async function getDailyProductSales(date: string) {
     return sales
 }
 
-export async function deleteDailyProductSale(id: string) {
-    return deleteDailyProductSales([id])
+export async function deleteDailyProductSale(id: string, reason?: string) {
+    return deleteDailyProductSales([id], reason)
 }
 
-export async function deleteDailyProductSales(ids: string[]) {
+export async function deleteDailyProductSales(ids: string[], reason?: string) {
     if (ids.length === 0) return { success: true }
     try {
-        await assertDaysOpen(await productSaleDates(ids))
-        await db.delete(dailyProductSales).where(inArray(dailyProductSales.id, ids))
+        const sales = await saleRows(ids)
+        await guardClosedDays(sales.map((sale) => sale.date), reason,
+            (date) => "Eliminó venta: " + sales.filter((sale) => sale.date === date).map((sale) => `${sale.name ?? "producto"} ×${sale.quantity}`).join(", "),
+            (tx) => tx.delete(dailyProductSales).where(inArray(dailyProductSales.id, ids)))
         revalidateDailyViews()
         return { success: true }
     } catch (error) {

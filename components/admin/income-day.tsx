@@ -16,6 +16,7 @@ import {
 } from "@/app/actions/daily-operations"
 import { closeDay } from "@/app/actions/closures"
 import { ProductPicker, type PickedProduct } from "./product-picker"
+import { useReasonPrompt } from "./reason-dialog"
 import {
     AlertDialog,
     AlertDialogAction,
@@ -50,7 +51,19 @@ interface ProductSale {
 
 interface Closure {
     closedAt: string | null
+    servicesTotal: number
+    productsTotal: number
 }
+
+interface ClosureEdit {
+    id: string
+    description: string
+    reason: string
+    createdAt: string | null
+}
+
+// On a closed day every change needs a reason; on an open day it goes through directly.
+type RequestReason = (change: string) => Promise<{ ok: boolean; reason?: string }>
 
 interface IncomeDayProps {
     date: string
@@ -58,6 +71,7 @@ interface IncomeDayProps {
     operations: Operation[]
     productSales: ProductSale[]
     closure: Closure | null
+    edits: ClosureEdit[]
     canClose: boolean
 }
 
@@ -70,10 +84,14 @@ export function parseAmount(raw: string) {
     return value < 1000 ? value * 1000 : value
 }
 
+// SQLite CURRENT_TIMESTAMP is UTC; show it in Bogotá time (also on the server, to avoid hydration mismatches).
+const formatTimestamp = (value: string) =>
+    new Date(value.replace(" ", "T") + "Z").toLocaleString("es-CO", { timeZone: "America/Bogota", day: "numeric", month: "long", hour: "numeric", minute: "2-digit" })
+
 // Inverse of parseAmount, to prefill the edit input the same way it is typed.
 const toInputValue = (amount: number) => String(amount % 1000 === 0 && amount < 1_000_000 ? amount / 1000 : amount)
 
-function AmountInput({ stylist, date, onAdded }: { stylist: string; date: string; onAdded: () => void }) {
+function AmountInput({ stylist, date, onAdded, requestReason }: { stylist: string; date: string; onAdded: () => void; requestReason: RequestReason }) {
     const [value, setValue] = useState("")
     const [saving, setSaving] = useState(false)
     const amount = parseAmount(value)
@@ -81,9 +99,11 @@ function AmountInput({ stylist, date, onAdded }: { stylist: string; date: string
     const submit = async (e: React.FormEvent) => {
         e.preventDefault()
         if (!amount || saving) return
+        const gate = await requestReason(`Agregar ${money(amount)} a ${stylist}`)
+        if (!gate.ok) return
         setSaving(true)
         try {
-            const result = await addDailyOperation({ stylist, date, amount, description: "Servicio" })
+            const result = await addDailyOperation({ stylist, date, amount, description: "Servicio" }, gate.reason)
             if (!result.success) {
                 toast.error(result.error)
                 return
@@ -124,11 +144,11 @@ function AmountInput({ stylist, date, onAdded }: { stylist: string; date: string
     )
 }
 
-function OperationItem({ op, locked, onChanged }: { op: Operation; locked: boolean; onChanged: () => void }) {
+function OperationItem({ op, locked, onChanged, requestReason }: { op: Operation; locked: boolean; onChanged: () => void; requestReason: RequestReason }) {
     const [editing, setEditing] = useState(false)
     const [value, setValue] = useState("")
     const [saving, setSaving] = useState(false)
-    const editable = !locked && op.status !== "facturada"
+    const editable = op.status !== "facturada"
     const amount = parseAmount(value)
 
     const save = async (e: React.FormEvent) => {
@@ -138,9 +158,11 @@ function OperationItem({ op, locked, onChanged }: { op: Operation; locked: boole
             setEditing(false)
             return
         }
+        const gate = await requestReason(`Cambiar ${op.stylist} de ${money(op.amount)} a ${money(amount)}`)
+        if (!gate.ok) return
         setSaving(true)
         try {
-            const result = await updateDailyOperationAmount(op.id, amount)
+            const result = await updateDailyOperationAmount(op.id, amount, gate.reason)
             if (!result.success) {
                 toast.error(result.error)
                 return
@@ -156,9 +178,12 @@ function OperationItem({ op, locked, onChanged }: { op: Operation; locked: boole
     }
 
     const remove = async () => {
-        if (!confirm(`¿Eliminar el servicio de ${op.stylist} por ${money(op.amount)}?`)) return
+        // On a closed day the reason dialog is the confirmation.
+        if (!locked && !confirm(`¿Eliminar el servicio de ${op.stylist} por ${money(op.amount)}?`)) return
+        const gate = await requestReason(`Eliminar ${money(op.amount)} de ${op.stylist}`)
+        if (!gate.ok) return
         try {
-            const result = await deleteDailyOperation(op.id)
+            const result = await deleteDailyOperation(op.id, gate.reason)
             if (!result.success) {
                 toast.error(result.error)
                 return
@@ -234,20 +259,29 @@ function OperationItem({ op, locked, onChanged }: { op: Operation; locked: boole
     )
 }
 
-export function IncomeDay({ date, columns, operations, productSales, closure, canClose }: IncomeDayProps) {
+export function IncomeDay({ date, columns, operations, productSales, closure, edits, canClose }: IncomeDayProps) {
     const router = useRouter()
     const [product, setProduct] = useState<PickedProduct | null>(null)
     const [quantity, setQuantity] = useState("1")
     const [busy, setBusy] = useState(false)
     const [closing, setClosing] = useState(false)
     const locked = closure !== null
+    const reasonPrompt = useReasonPrompt()
 
     const refresh = () => router.refresh()
 
+    const requestReason: RequestReason = async (change) => {
+        if (!locked) return { ok: true }
+        const reason = await reasonPrompt.ask(change)
+        return reason ? { ok: true, reason } : { ok: false }
+    }
+
     const removeSale = async (sale: ProductSale) => {
-        if (!confirm(`¿Eliminar la venta de ${sale.productName ?? "producto"}?`)) return
+        if (!locked && !confirm(`¿Eliminar la venta de ${sale.productName ?? "producto"}?`)) return
+        const gate = await requestReason(`Eliminar venta de ${sale.productName ?? "producto"} ×${sale.quantity}`)
+        if (!gate.ok) return
         try {
-            const result = await deleteDailyProductSale(sale.id)
+            const result = await deleteDailyProductSale(sale.id, gate.reason)
             if (!result.success) {
                 toast.error(result.error)
                 return
@@ -263,9 +297,11 @@ export function IncomeDay({ date, columns, operations, productSales, closure, ca
         e.preventDefault()
         const qty = Number(quantity)
         if (!product || !qty || qty < 1) return
+        const gate = await requestReason(`Agregar venta de ${product.name} ×${qty}`)
+        if (!gate.ok) return
         setBusy(true)
         try {
-            const result = await addDailyProductSale({ productId: product.id, quantity: qty, date })
+            const result = await addDailyProductSale({ productId: product.id, quantity: qty, date }, gate.reason)
             if (!result.success) {
                 toast.error(result.error)
                 return
@@ -308,17 +344,22 @@ export function IncomeDay({ date, columns, operations, productSales, closure, ca
 
     return (
         <div className="space-y-6">
-            {locked && (
-                <div className="flex items-center gap-3 rounded-lg border border-primary/40 bg-primary/10 p-4 text-sm">
+            {reasonPrompt.dialog}
+
+            {locked && closure && (
+                <div className="flex items-start gap-3 rounded-lg border border-primary/40 bg-primary/10 p-4 text-sm">
                     <Lock className="h-5 w-5 shrink-0 text-primary" />
-                    <p>
-                        <strong>Caja cerrada.</strong> Los valores de este día ya no se pueden agregar, editar ni eliminar.
-                        {closure?.closedAt && (
-                            <span className="text-muted-foreground">
-                                {" "}Cerrada el {new Date(closure.closedAt.replace(" ", "T") + "Z").toLocaleString("es-CO", { timeZone: "America/Bogota", day: "numeric", month: "long", hour: "numeric", minute: "2-digit" })}
-                            </span>
+                    <div className="space-y-1">
+                        <p>
+                            <strong>Caja cerrada.</strong> Puedes corregir los valores, pero cada cambio pide un motivo y queda registrado.
+                            {closure.closedAt && <span className="text-muted-foreground"> Cerrada el {formatTimestamp(closure.closedAt)}</span>}
+                        </p>
+                        {closure.servicesTotal + closure.productsTotal !== servicesTotal + productsTotal && (
+                            <p className="text-muted-foreground">
+                                Total al cerrar: {money(closure.servicesTotal + closure.productsTotal)} · Total actual: {money(servicesTotal + productsTotal)}
+                            </p>
                         )}
-                    </p>
+                    </div>
                 </div>
             )}
 
@@ -340,10 +381,10 @@ export function IncomeDay({ date, columns, operations, productSales, closure, ca
                                 <td key={name} className="px-3 py-2 border-r">
                                     <ul className="space-y-1 mb-3">
                                         {byStylist(name).map((op) => (
-                                            <OperationItem key={op.id} op={op} locked={locked} onChanged={refresh} />
+                                            <OperationItem key={op.id} op={op} locked={locked} onChanged={refresh} requestReason={requestReason} />
                                         ))}
                                     </ul>
-                                    {!locked && <AmountInput stylist={name} date={date} onAdded={refresh} />}
+                                    <AmountInput stylist={name} date={date} onAdded={refresh} requestReason={requestReason} />
                                 </td>
                             ))}
                             <td className="px-3 py-2">
@@ -358,7 +399,7 @@ export function IncomeDay({ date, columns, operations, productSales, closure, ca
                                                 {money(saleTotal(sale))}
                                                 {sale.status === "facturada" ? (
                                                     <Check className="h-3.5 w-3.5 text-green-600" aria-label="Facturado" />
-                                                ) : !locked ? (
+                                                ) : (
                                                     <button
                                                         type="button"
                                                         onClick={() => removeSale(sale)}
@@ -367,33 +408,31 @@ export function IncomeDay({ date, columns, operations, productSales, closure, ca
                                                     >
                                                         <X className="h-3.5 w-3.5" />
                                                     </button>
-                                                ) : null}
+                                                )}
                                             </span>
                                         </li>
                                     ))}
                                 </ul>
-                                {!locked && (
-                                    <form onSubmit={addSale} className="flex gap-1">
-                                        <ProductPicker value={product} onChange={setProduct} disabled={busy} />
-                                        <Input
-                                            value={quantity}
-                                            onChange={(e) => setQuantity(e.target.value)}
-                                            type="number"
-                                            min={1}
-                                            className="h-8 w-14 text-sm"
-                                            aria-label="Cantidad"
-                                            disabled={busy}
-                                        />
-                                        <button
-                                            type="submit"
-                                            disabled={!product || busy}
-                                            className="shrink-0 h-8 w-8 flex items-center justify-center rounded-md bg-primary text-primary-foreground disabled:opacity-40"
-                                            title="Agregar producto"
-                                        >
-                                            <Plus className="h-4 w-4" />
-                                        </button>
-                                    </form>
-                                )}
+                                <form onSubmit={addSale} className="flex gap-1">
+                                    <ProductPicker value={product} onChange={setProduct} disabled={busy} />
+                                    <Input
+                                        value={quantity}
+                                        onChange={(e) => setQuantity(e.target.value)}
+                                        type="number"
+                                        min={1}
+                                        className="h-8 w-14 text-sm"
+                                        aria-label="Cantidad"
+                                        disabled={busy}
+                                    />
+                                    <button
+                                        type="submit"
+                                        disabled={!product || busy}
+                                        className="shrink-0 h-8 w-8 flex items-center justify-center rounded-md bg-primary text-primary-foreground disabled:opacity-40"
+                                        title="Agregar producto"
+                                    >
+                                        <Plus className="h-4 w-4" />
+                                    </button>
+                                </form>
                             </td>
                         </tr>
                     </tbody>
@@ -441,7 +480,10 @@ export function IncomeDay({ date, columns, operations, productSales, closure, ca
                                             Servicios {money(servicesTotal)} + Productos {money(productsTotal)} ={" "}
                                             <strong className="text-foreground">{money(servicesTotal + productsTotal)}</strong>
                                         </p>
-                                        <p>Después de cerrar ya no se podrán agregar, editar ni eliminar valores de este día.</p>
+                                        <p>
+                                            Después de cerrar, los valores de este día <strong className="text-foreground">sí se pueden corregir</strong>,
+                                            pero cada cambio (agregar, editar o eliminar) pedirá <strong className="text-foreground">obligatoriamente el motivo</strong> y quedará registrado.
+                                        </p>
                                     </div>
                                 </AlertDialogDescription>
                             </AlertDialogHeader>
@@ -451,6 +493,23 @@ export function IncomeDay({ date, columns, operations, productSales, closure, ca
                             </AlertDialogFooter>
                         </AlertDialogContent>
                     </AlertDialog>
+                </div>
+            )}
+
+            {edits.length > 0 && (
+                <div className="rounded-lg border bg-card p-4 space-y-2">
+                    <p className="text-sm font-semibold">Cambios después del cierre</p>
+                    <ul className="space-y-2 text-sm">
+                        {edits.map((edit) => (
+                            <li key={edit.id} className="border-l-2 border-primary/50 pl-3">
+                                <p>{edit.description}</p>
+                                <p className="text-muted-foreground">
+                                    Motivo: {edit.reason}
+                                    {edit.createdAt && <> · {formatTimestamp(edit.createdAt)}</>}
+                                </p>
+                            </li>
+                        ))}
+                    </ul>
                 </div>
             )}
 

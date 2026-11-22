@@ -3,7 +3,7 @@ import { getDailyOperations, getDailyProductSales, getWeeklyRecords } from "@/ap
 import { IncomeDay } from "@/components/admin/income-day"
 import { IncomeWeek } from "@/components/admin/income-week"
 import { IncomeHeader } from "@/components/admin/income-header"
-import { getClosure, getClosuresBetween } from "@/lib/closures"
+import { getClosure, getClosureEdits, getClosuresBetween } from "@/lib/closures"
 import { todayInBogota } from "@/lib/dates"
 import { listEmployees } from "@/lib/employees"
 
@@ -43,15 +43,22 @@ export default async function IngresosPage(props: PageProps) {
         return (
             <div className="h-full flex-1 flex-col space-y-6 p-4 md:p-8 md:flex">
                 <IncomeHeader view={view} date={date} />
-                <IncomeWeek weekStart={weekStart} columns={columns} records={records} closedDates={closures.map((c) => c.date)} />
+                <IncomeWeek
+                    weekStart={weekStart}
+                    columns={columns}
+                    records={records}
+                    closedDates={closures.map((c) => c.date)}
+                    today={todayInBogota()}
+                />
             </div>
         )
     }
 
-    const [operations, productSales, closure] = await Promise.all([
+    const [operations, productSales, closure, edits] = await Promise.all([
         getDailyOperations(date),
         getDailyProductSales(date),
         getClosure(date),
+        getClosureEdits(date),
     ])
     const columns = columnsFor(employees, operations.map((op) => op.stylist))
 
@@ -64,6 +71,7 @@ export default async function IngresosPage(props: PageProps) {
                 operations={operations}
                 productSales={productSales}
                 closure={closure}
+                edits={edits}
                 canClose={date <= todayInBogota()}
             />
         </div>

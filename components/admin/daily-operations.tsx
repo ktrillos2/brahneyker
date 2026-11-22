@@ -147,7 +147,7 @@ export function DailyOperations({ date, operations, productSales, products, week
             {isClosed && (
                 <div className="flex items-center gap-3 rounded-lg border border-primary/40 bg-primary/10 p-4 text-sm">
                     <Lock className="h-5 w-5 shrink-0 text-primary" />
-                    <p><strong>Caja cerrada.</strong> Los servicios y ventas de este día ya no se pueden agregar, editar ni eliminar. Sí se pueden facturar.</p>
+                    <p><strong>Caja cerrada.</strong> Para corregir valores de este día usa Ingresos: cada cambio pide un motivo y queda registrado. Sí se pueden facturar.</p>
                 </div>
             )}
 

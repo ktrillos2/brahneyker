@@ -1,9 +1,26 @@
 "use client"
 
+import { useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { addDays, format, parseISO } from "date-fns"
 import { es } from "date-fns/locale"
 import { Lock } from "lucide-react"
+import { toast } from "sonner"
+
+import { closeWeek } from "@/app/actions/closures"
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+import { Button } from "@/components/ui/button"
 
 import { money } from "./income-day"
 import type { WeeklyRecords } from "./weekly-summary"
@@ -13,10 +30,34 @@ interface IncomeWeekProps {
     columns: string[]
     records: WeeklyRecords
     closedDates: string[]
+    today: string
 }
 
-export function IncomeWeek({ weekStart, columns, records, closedDates }: IncomeWeekProps) {
+export function IncomeWeek({ weekStart, columns, records, closedDates, today }: IncomeWeekProps) {
+    const router = useRouter()
+    const [closing, setClosing] = useState(false)
     const days = Array.from({ length: 7 }, (_, i) => format(addDays(parseISO(weekStart), i), "yyyy-MM-dd"))
+    // Days up to today whose cash register is still open
+    const openDays = days.filter((day) => day <= today && !closedDates.includes(day))
+    const alreadyClosed = days.filter((day) => closedDates.includes(day))
+
+    const handleCloseWeek = async () => {
+        setClosing(true)
+        try {
+            const result = await closeWeek(weekStart)
+            if (result.error) {
+                toast.error(result.error)
+                return
+            }
+            toast.success("Caja de la semana cerrada")
+            router.refresh()
+        } catch (error) {
+            console.error(error)
+            toast.error("Error al cerrar la caja de la semana")
+        } finally {
+            setClosing(false)
+        }
+    }
 
     const serviceTotal = (day: string | null, stylist: string | null) =>
         records.operations
@@ -104,6 +145,45 @@ export function IncomeWeek({ weekStart, columns, records, closedDates }: IncomeW
                     <p className="text-2xl font-bold text-primary tabular-nums">{money(weekServices + weekProducts)}</p>
                 </div>
             </div>
+
+            {openDays.length > 0 && (
+                <div className="flex justify-end">
+                    <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                            <Button size="lg" disabled={closing}>
+                                <Lock className="h-4 w-4 mr-2" />
+                                {closing ? "Cerrando..." : "Cerrar caja de la semana"}
+                            </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>¿Cerrar la caja de la semana?</AlertDialogTitle>
+                                <AlertDialogDescription asChild>
+                                    <div className="space-y-2">
+                                        <p>
+                                            Se cerrará la caja de{" "}
+                                            <strong className="text-foreground capitalize">
+                                                {openDays.map((day) => format(parseISO(day), "EEEE d", { locale: es })).join(", ")}
+                                            </strong>
+                                            {alreadyClosed.length > 0 && (
+                                                <> (ya estaba cerrada: <span className="capitalize">{alreadyClosed.map((day) => format(parseISO(day), "EEEE d", { locale: es })).join(", ")}</span>)</>
+                                            )}.
+                                        </p>
+                                        <p>
+                                            Después de cerrar, los valores <strong className="text-foreground">sí se pueden corregir</strong>,
+                                            pero cada cambio pedirá <strong className="text-foreground">obligatoriamente el motivo</strong> y quedará registrado.
+                                        </p>
+                                    </div>
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction onClick={handleCloseWeek}>Sí, cerrar caja de la semana</AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
+                </div>
+            )}
         </div>
     )
 }

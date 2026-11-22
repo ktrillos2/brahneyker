@@ -110,3 +110,12 @@ export const dailyClosures = sqliteTable("daily_closures", {
     productsTotal: real("products_total").notNull(),
     closedAt: text("closed_at").default(sql`(CURRENT_TIMESTAMP)`),
 })
+
+// Changes made to a day after its cash register was closed, with the mandatory reason
+export const closureEdits = sqliteTable("closure_edits", {
+    id: text("id").primaryKey(),
+    date: text("date").notNull(), // YYYY-MM-DD of the closed day
+    description: text("description").notNull(),
+    reason: text("reason").notNull(),
+    createdAt: text("created_at").default(sql`(CURRENT_TIMESTAMP)`),
+})
